@@ -29,7 +29,7 @@ export const Header = () => {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-gold transition-transform group-hover:scale-105">
             <BookOpen className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="font-serif text-xl font-bold tracking-tight md:text-2xl">
+          <span className="font-forum text-xl tracking-tight md:text-2xl">
             Book<span className="text-primary">Haven</span>
           </span>
         </Link>

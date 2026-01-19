@@ -17,10 +17,11 @@ export const BestsellerSection = () => {
               <TrendingUp className="h-6 w-6 text-secondary" />
             </div>
             <div>
-              <h2 className="font-serif text-3xl md:text-4xl font-bold mb-1">
+              <p className="section-subtitle section-subtitle-left">Trending</p>
+              <h2 className="headline-2">
                 Bestsellers
               </h2>
-              <p className="text-muted-foreground text-lg">
+              <p className="body-2 text-muted-foreground mt-1">
                 Top-selling books this month
               </p>
             </div>

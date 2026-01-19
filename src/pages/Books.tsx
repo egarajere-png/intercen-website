@@ -141,10 +141,10 @@ const Books = () => {
             <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
             <span className="text-foreground">Books</span>
           </nav>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">
+          <h1 className="headline-2 mb-2">
             Browse Our Collection
           </h1>
-          <p className="text-muted-foreground text-lg">
+          <p className="body-2 text-muted-foreground">
             Discover {mockBooks.length}+ books across various genres
           </p>
         </div>
