@@ -13,10 +13,11 @@ export const FeaturedBooks = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-10">
           <div>
-            <h2 className="font-serif text-3xl md:text-4xl font-bold mb-2">
+            <p className="section-subtitle section-subtitle-left">Featured</p>
+            <h2 className="headline-2">
               Featured Books
             </h2>
-            <p className="text-muted-foreground text-lg">
+            <p className="body-2 text-muted-foreground mt-2">
               Hand-picked selections from our editors
             </p>
           </div>

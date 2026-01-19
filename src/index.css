@@ -1,12 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Forum&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+/* BookHaven - Premium Book E-Commerce Design System */
 
 @layer base {
   :root {
-    /* Brand Colors - Warm Yellow, White, Red */
+    /* Brand Colors - Warm Yellow, White, Red - RETAINED */
     --background: 48 100% 99%;
     --foreground: 20 14% 15%;
 
@@ -40,8 +42,9 @@
     --ring: 45 93% 47%;
 
     --radius: 0.75rem;
+    --radius-24: 24px;
 
-    /* Custom Design Tokens */
+    /* Custom BookHaven Tokens */
     --gold: 45 93% 47%;
     --gold-light: 45 100% 94%;
     --gold-dark: 45 93% 35%;
@@ -51,16 +54,39 @@
     --cream: 48 100% 99%;
     --charcoal: 20 14% 15%;
 
-    /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(45 93% 47% / 0.1) 0%, hsl(0 84% 50% / 0.05) 100%);
-    --gradient-gold: linear-gradient(135deg, hsl(45 93% 55%) 0%, hsl(45 93% 47%) 100%);
-    --gradient-warm: linear-gradient(180deg, hsl(48 100% 99%) 0%, hsl(45 100% 96%) 100%);
+    /* Smoky Blacks for overlays */
+    --smoky-black-1: 40 12% 5%;
+    --smoky-black-2: 30 8% 5%;
+    --smoky-black-3: 0 3% 7%;
+
+    /* Quick Silver */
+    --quick-silver: 0 0% 65%;
+
+    /* Alpha variations */
+    --white-alpha-20: 0 0% 100% / 0.2;
+    --white-alpha-10: 0 0% 100% / 0.1;
+    --black-alpha-80: 0 0% 0% / 0.8;
+    --black-alpha-50: 0 0% 0% / 0.5;
+
+    /* Typography */
+    --font-forum: 'Forum', cursive;
+    --font-dm-sans: 'DM Sans', sans-serif;
+
+    /* Spacing */
+    --section-space: 70px;
 
     /* Shadows */
+    --shadow-elegant: 0px 0px 25px 0px hsla(0, 0%, 0%, 0.1);
     --shadow-soft: 0 4px 20px -4px hsl(20 14% 15% / 0.08);
     --shadow-card: 0 8px 30px -8px hsl(20 14% 15% / 0.12);
     --shadow-elevated: 0 20px 50px -15px hsl(20 14% 15% / 0.15);
     --shadow-gold: 0 8px 30px -8px hsl(45 93% 47% / 0.3);
+
+    /* Gradients */
+    --gradient-overlay: linear-gradient(to top, hsla(0, 0%, 0%, 0.9), hsla(0, 0%, 0%, 0.7), transparent);
+    --gradient-gold: linear-gradient(135deg, hsl(45 93% 55%) 0%, hsl(45 93% 47%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(45 93% 47% / 0.1) 0%, hsl(0 84% 50% / 0.05) 100%);
+    --gradient-warm: linear-gradient(180deg, hsl(48 100% 99%) 0%, hsl(45 100% 96%) 100%);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -117,46 +143,223 @@
     @apply border-border;
   }
 
-  body {
-    @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', sans-serif;
+  html {
+    scroll-behavior: smooth;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Playfair Display', serif;
+  body {
+    @apply bg-background text-foreground font-dm-sans antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--primary));
+    border-radius: 10px;
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.3);
+    color: hsl(var(--foreground));
   }
 }
 
 @layer components {
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(var(--gold-dark)) 100%);
+  /* Typography Classes */
+  .font-forum {
+    font-family: var(--font-forum);
   }
 
-  .bg-gradient-hero {
-    background: var(--gradient-hero);
+  .font-dm-sans {
+    font-family: var(--font-dm-sans);
   }
 
-  .bg-gradient-warm {
-    background: var(--gradient-warm);
+  /* Display & Headlines */
+  .display-1 {
+    @apply font-forum font-normal leading-none;
+    font-size: clamp(2rem, 6.7vw + 1.3rem, 8rem);
   }
 
-  .shadow-soft {
-    box-shadow: var(--shadow-soft);
+  .headline-1 {
+    @apply font-forum font-normal;
+    font-size: clamp(2rem, 2.5vw + 2rem, 4.5rem);
+    line-height: 1.2;
   }
 
-  .shadow-card {
-    box-shadow: var(--shadow-card);
+  .headline-2 {
+    @apply font-forum font-normal;
+    font-size: clamp(1.3rem, 2.4vw + 1.3rem, 3.7rem);
+    line-height: 1.4;
   }
 
-  .shadow-elevated {
-    box-shadow: var(--shadow-elevated);
+  /* Titles */
+  .title-1 {
+    @apply font-forum font-normal;
+    font-size: clamp(1.6rem, 1.2vw + 1.6rem, 2.8rem);
+    line-height: 1.2;
   }
 
-  .shadow-gold {
-    box-shadow: var(--shadow-gold);
+  .title-2 {
+    @apply font-forum font-normal text-[2.2rem] leading-tight;
   }
 
+  .title-3 {
+    @apply font-forum font-normal text-[2.1rem] leading-tight;
+  }
+
+  .title-4 {
+    @apply font-forum font-normal;
+    font-size: clamp(1.6rem, 1.2vw + 1.6rem, 2.8rem);
+    line-height: 1.2;
+  }
+
+  /* Body Text */
+  .body-1 {
+    @apply text-2xl leading-relaxed;
+  }
+
+  .body-2 {
+    @apply text-base leading-relaxed;
+  }
+
+  .body-3 {
+    @apply text-lg leading-normal;
+  }
+
+  .body-4 {
+    @apply text-base leading-relaxed;
+  }
+
+  /* Labels */
+  .label-1 {
+    @apply text-sm leading-normal;
+  }
+
+  .label-2 {
+    @apply text-xs leading-normal;
+  }
+
+  /* Section Subtitle */
+  .section-subtitle {
+    @apply relative text-primary font-bold uppercase tracking-[0.4em] mb-3 text-sm;
+  }
+
+  .section-subtitle::after {
+    content: '';
+    @apply block w-24 h-px bg-primary mx-auto mt-3;
+  }
+
+  .section-subtitle-left::after {
+    @apply mx-0;
+  }
+
+  /* Separator Diamond */
+  .separator {
+    @apply w-2 h-2 border border-primary rotate-45;
+  }
+
+  /* Hover Underline Effect */
+  .hover-underline {
+    @apply relative max-w-max;
+  }
+
+  .hover-underline::after {
+    content: '';
+    @apply absolute left-0 bottom-0 w-full h-[3px] border-t border-b border-primary scale-x-[0.2] opacity-0 transition-all duration-500;
+  }
+
+  .hover-underline:hover::after,
+  .hover-underline:focus-visible::after {
+    @apply scale-x-100 opacity-100;
+  }
+
+  /* Glass Effect */
+  .glass {
+    @apply bg-white/80 backdrop-blur-md border border-white/50;
+  }
+
+  /* Shine Effect on Hover */
+  .hover-shine {
+    @apply relative overflow-hidden;
+  }
+
+  .hover-shine::after {
+    content: '';
+    @apply absolute top-0 left-0 w-1/2 h-full;
+    background-image: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.4) 100%);
+    transform: skewX(-0.08turn) translateX(-180%);
+  }
+
+  .hover-shine:hover::after {
+    transform: skewX(-0.08turn) translateX(275%);
+    @apply transition-transform duration-1000;
+  }
+
+  /* Image Cover */
+  .img-cover {
+    @apply w-full h-full object-cover;
+  }
+
+  /* Background with Overlay */
+  .bg-overlay {
+    @apply relative;
+  }
+
+  .bg-overlay::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent z-10;
+  }
+
+  /* Float Animation */
+  .float-animation {
+    animation: float 5s linear infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(30px); }
+  }
+
+  /* Hero Scale Animation */
+  .hero-scale {
+    animation: smoothScale 7s linear forwards;
+  }
+
+  @keyframes smoothScale {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.15); }
+  }
+
+  /* Slider Reveal Animation */
+  .slider-reveal {
+    @apply translate-y-8 opacity-0;
+  }
+
+  .slider-reveal.active {
+    animation: sliderReveal 1s ease forwards;
+  }
+
+  @keyframes sliderReveal {
+    0% {
+      transform: translateY(30px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  /* Book Card */
   .book-card {
     @apply relative overflow-hidden rounded-xl bg-card transition-all duration-300;
     box-shadow: var(--shadow-card);
@@ -167,6 +370,7 @@
     box-shadow: var(--shadow-elevated);
   }
 
+  /* Premium Button Styles */
   .btn-primary {
     @apply bg-primary text-primary-foreground font-semibold px-6 py-3 rounded-lg transition-all duration-200;
   }
@@ -184,9 +388,75 @@
     @apply bg-secondary/90;
     transform: translateY(-1px);
   }
+
+  /* Rotating Border */
+  .rotating-border::after {
+    content: '';
+    @apply absolute inset-0 border border-primary;
+    animation: rotate360 15s linear infinite;
+  }
+
+  @keyframes rotate360 {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 }
 
 @layer utilities {
+  /* Gradient backgrounds */
+  .bg-gradient-hero {
+    background: var(--gradient-hero);
+  }
+
+  .bg-gradient-warm {
+    background: var(--gradient-warm);
+  }
+
+  .bg-gradient-gold {
+    background: var(--gradient-gold);
+  }
+
+  .bg-gradient-overlay {
+    background: var(--gradient-overlay);
+  }
+
+  /* Shadows */
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-gold {
+    box-shadow: var(--shadow-gold);
+  }
+
+  .shadow-elegant {
+    box-shadow: var(--shadow-elegant);
+  }
+
+  /* Text gradient */
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-gold);
+  }
+
+  /* Letter Spacing */
+  .tracking-widest-2 {
+    letter-spacing: 0.4em;
+  }
+
+  .tracking-widest-3 {
+    letter-spacing: 0.3em;
+  }
+
+  /* Animations */
   .animate-fade-in {
     animation: fadeIn 0.5s ease-out forwards;
   }

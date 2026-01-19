@@ -18,10 +18,11 @@ export const CategorySection = () => {
       <div className="container">
         {/* Header */}
         <div className="text-center mb-12">
-          <h2 className="font-serif text-3xl md:text-4xl font-bold mb-3">
+          <p className="section-subtitle">Categories</p>
+          <h2 className="headline-2">
             Browse by Category
           </h2>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <p className="body-2 text-muted-foreground max-w-2xl mx-auto mt-3">
             Explore our curated collection across diverse genres
           </p>
         </div>

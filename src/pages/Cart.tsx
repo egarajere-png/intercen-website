@@ -15,8 +15,8 @@ const Cart = () => {
             <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
               <ShoppingBag className="h-12 w-12 text-muted-foreground" />
             </div>
-            <h1 className="font-serif text-3xl font-bold mb-4">Your Cart is Empty</h1>
-            <p className="text-muted-foreground mb-8">
+            <h1 className="headline-2 mb-4">Your Cart is Empty</h1>
+            <p className="body-2 text-muted-foreground mb-8">
               Looks like you haven't added any books yet. Start exploring our collection!
             </p>
             <Link to="/books">
@@ -34,7 +34,7 @@ const Cart = () => {
   return (
     <Layout>
       <div className="container py-8 md:py-12">
-        <h1 className="font-serif text-3xl md:text-4xl font-bold mb-8">Shopping Cart</h1>
+        <h1 className="headline-2 mb-8">Shopping Cart</h1>
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Cart Items */}

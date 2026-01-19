@@ -7,7 +7,7 @@ export const HeroSection = () => {
     <section className="relative overflow-hidden bg-gradient-warm">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-30">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl" />
+        <div className="absolute top-20 left-10 w-72 h-72 bg-primary/20 rounded-full blur-3xl float-animation" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-secondary/10 rounded-full blur-3xl" />
       </div>
 
@@ -15,24 +15,23 @@ export const HeroSection = () => {
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           {/* Content */}
           <div className="text-center lg:text-left animate-slide-up">
-            <div className="inline-flex items-center gap-2 bg-accent rounded-full px-4 py-2 mb-6">
-              <Star className="h-4 w-4 text-primary fill-primary" />
-              <span className="text-sm font-medium">Over 10,000+ Books Available</span>
-            </div>
+            <p className="section-subtitle section-subtitle-left text-center lg:text-left">
+              Over 10,000+ Books Available
+            </p>
 
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-6">
+            <h1 className="headline-1 mb-6">
               Discover Your Next
               <span className="block text-primary">Great Read</span>
             </h1>
 
-            <p className="text-lg md:text-xl text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
+            <p className="body-2 text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
               From bestsellers to hidden gems, find the perfect book for every mood. 
               Fast delivery across Kenya with secure payment options.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-12">
               <Link to="/books">
-                <Button variant="hero" size="xl" className="gap-2 w-full sm:w-auto">
+                <Button variant="hero" size="xl" className="gap-2 w-full sm:w-auto hover-shine">
                   Browse Collection
                   <ArrowRight className="h-5 w-5" />
                 </Button>
@@ -51,8 +50,8 @@ export const HeroSection = () => {
                   <Truck className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold">Free Delivery</p>
-                  <p className="text-xs text-muted-foreground">On orders over KES 2,000</p>
+                  <p className="label-1 font-semibold">Free Delivery</p>
+                  <p className="label-2 text-muted-foreground">On orders over KES 2,000</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -60,8 +59,8 @@ export const HeroSection = () => {
                   <BookOpen className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold">Quality Books</p>
-                  <p className="text-xs text-muted-foreground">Authentic & verified</p>
+                  <p className="label-1 font-semibold">Quality Books</p>
+                  <p className="label-2 text-muted-foreground">Authentic & verified</p>
                 </div>
               </div>
             </div>
@@ -73,19 +72,19 @@ export const HeroSection = () => {
               {/* Main Book Stack */}
               <div className="relative w-full max-w-md mx-auto">
                 {/* Background Book */}
-                <div className="absolute -left-8 top-8 w-48 h-72 bg-secondary/20 rounded-xl transform -rotate-12 shadow-xl" />
-                <div className="absolute -right-8 top-4 w-48 h-72 bg-primary/20 rounded-xl transform rotate-12 shadow-xl" />
+                <div className="absolute -left-8 top-8 w-48 h-72 bg-secondary/20 rounded-xl transform -rotate-12 shadow-elegant" />
+                <div className="absolute -right-8 top-4 w-48 h-72 bg-primary/20 rounded-xl transform rotate-12 shadow-elegant" />
                 
                 {/* Main Featured Book */}
-                <div className="relative bg-card rounded-2xl shadow-elevated p-6 transform hover:scale-105 transition-transform duration-300">
+                <div className="relative bg-card rounded-2xl shadow-elevated p-6 transform hover:scale-105 transition-transform duration-500 hover-shine">
                   <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted mb-4">
                     <img
                       src="https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"
                       alt="Featured Book"
-                      className="w-full h-full object-cover"
+                      className="img-cover hero-scale"
                     />
                   </div>
-                  <h3 className="font-serif font-bold text-lg mb-1">The Midnight Library</h3>
+                  <h3 className="font-forum font-normal text-xl mb-1">The Midnight Library</h3>
                   <p className="text-muted-foreground text-sm mb-2">Matt Haig</p>
                   <div className="flex items-center justify-between">
                     <span className="text-xl font-bold text-primary">$24.99</span>

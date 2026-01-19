@@ -43,10 +43,11 @@ const About = () => {
 
         <div className="container relative py-16 md:py-24">
           <div className="max-w-3xl mx-auto text-center">
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-bold mb-6">
+            <p className="section-subtitle">About Us</p>
+            <h1 className="headline-1 mb-6">
               About <span className="text-primary">BookHaven</span>
             </h1>
-            <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+            <p className="body-1 text-muted-foreground leading-relaxed">
               We're more than just a bookstore. We're a community of book lovers dedicated to 
               connecting readers with stories that inspire, educate, and transform lives.
             </p>

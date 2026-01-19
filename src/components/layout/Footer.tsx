@@ -10,10 +10,10 @@ export const Footer = () => {
       <div className="border-b border-white/10">
         <div className="container py-12 md:py-16">
           <div className="max-w-2xl mx-auto text-center">
-            <h3 className="font-serif text-2xl md:text-3xl font-bold mb-3">
+            <h3 className="title-1 text-secondary-foreground mb-3">
               Join Our Reading Community
             </h3>
-            <p className="text-white/70 mb-6">
+            <p className="body-2 text-secondary-foreground/70 mb-6">
               Subscribe to get updates on new releases, exclusive offers, and reading recommendations.
             </p>
             <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
@@ -39,7 +39,7 @@ export const Footer = () => {
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
                 <BookOpen className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="font-serif text-xl font-bold">
+              <span className="font-forum text-xl">
                 Book<span className="text-primary">Haven</span>
               </span>
             </Link>
@@ -62,7 +62,7 @@ export const Footer = () => {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-semibold text-lg mb-4">Quick Links</h4>
+            <h4 className="font-forum text-lg mb-4">Quick Links</h4>
             <ul className="space-y-3">
               {['Home', 'Books', 'Categories', 'About Us', 'Contact'].map(link => (
                 <li key={link}>
@@ -79,7 +79,7 @@ export const Footer = () => {
 
           {/* Categories */}
           <div>
-            <h4 className="font-semibold text-lg mb-4">Categories</h4>
+            <h4 className="font-forum text-lg mb-4">Categories</h4>
             <ul className="space-y-3">
               {['Fiction', 'Non-Fiction', 'Mystery & Thriller', 'Romance', 'Science Fiction', 'Children\'s Books'].map(cat => (
                 <li key={cat}>
@@ -96,7 +96,7 @@ export const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h4 className="font-semibold text-lg mb-4">Contact Us</h4>
+            <h4 className="font-forum text-lg mb-4">Contact Us</h4>
             <ul className="space-y-4">
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />

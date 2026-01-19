@@ -42,7 +42,7 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
 
             {/* Content */}
             <div className="flex-1 flex flex-col">
-              <h3 className="font-serif text-xl md:text-2xl font-bold mb-2 group-hover:text-primary transition-colors">
+            <h3 className="font-forum text-xl md:text-2xl mb-2 group-hover:text-primary transition-colors">
                 {book.title}
               </h3>
               <p className="text-muted-foreground mb-2">by {book.author}</p>
@@ -147,7 +147,7 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
             </span>
           </div>
 
-          <h3 className="font-serif font-semibold text-base leading-tight mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+          <h3 className="font-forum text-base leading-tight mb-1 line-clamp-2 group-hover:text-primary transition-colors">
             {book.title}
           </h3>
           
