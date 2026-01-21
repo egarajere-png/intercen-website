@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge';
 
 const navLinks = [
   { href: '/', label: 'Home' },
-  { href: '/books', label: 'Books' },
-  { href: '/categories', label: 'Categories' },
+  { href: '/books', label: 'Books & Categories' },
+  { href: '/publish', label: 'Publish With Us' },
+  { href: '/services', label: 'Products & Services' },
   { href: '/about', label: 'About Us' },
 ];
 
@@ -30,7 +31,7 @@ export const Header = () => {
             <BookOpen className="h-5 w-5 text-primary-foreground" />
           </div>
           <span className="font-forum text-xl tracking-tight md:text-2xl">
-            Book<span className="text-primary">Haven</span>
+            Intercen<span className="text-primary"> Books</span>
           </span>
         </Link>
 
