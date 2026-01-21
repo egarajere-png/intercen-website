@@ -9,7 +9,8 @@ import Books from "./pages/Books";
 import BookDetail from "./pages/BookDetail";
 import Cart from "./pages/Cart";
 import About from "./pages/About";
-import Categories from "./pages/Categories";
+import PublishWithUs from "./pages/PublishWithUs";
+import ProductsServices from "./pages/ProductsServices";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -28,7 +29,8 @@ const App = () => (
             <Route path="/books/:id" element={<BookDetail />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/about" element={<About />} />
-            <Route path="/categories" element={<Categories />} />
+            <Route path="/publish" element={<PublishWithUs />} />
+            <Route path="/services" element={<ProductsServices />} />
             <Route path="/auth" element={<Auth />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

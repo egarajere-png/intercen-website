@@ -16,29 +16,30 @@ export const HeroSection = () => {
           {/* Content */}
           <div className="text-center lg:text-left animate-slide-up">
             <p className="section-subtitle section-subtitle-left text-center lg:text-left">
-              Over 10,000+ Books Available
+              Publishing Excellence Since 2008
             </p>
 
             <h1 className="headline-1 mb-6">
-              Discover Your Next
-              <span className="block text-primary">Great Read</span>
+              Your Partner in
+              <span className="block text-primary">Publishing Success</span>
             </h1>
 
             <p className="body-2 text-muted-foreground max-w-xl mx-auto lg:mx-0 mb-8">
-              From bestsellers to hidden gems, find the perfect book for every mood. 
-              Fast delivery across Kenya with secure payment options.
+              Intercen Books is a leading publisher and book marketplace in East Africa. 
+              We help authors bring their stories to life and connect readers with 
+              exceptional literature.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-12">
               <Link to="/books">
                 <Button variant="hero" size="xl" className="gap-2 w-full sm:w-auto hover-shine">
-                  Browse Collection
+                  Browse Books
                   <ArrowRight className="h-5 w-5" />
                 </Button>
               </Link>
-              <Link to="/about">
+              <Link to="/publish">
                 <Button variant="hero-outline" size="xl" className="w-full sm:w-auto">
-                  Learn More
+                  Publish With Us
                 </Button>
               </Link>
             </div>
@@ -50,8 +51,8 @@ export const HeroSection = () => {
                   <Truck className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="label-1 font-semibold">Free Delivery</p>
-                  <p className="label-2 text-muted-foreground">On orders over KES 2,000</p>
+                  <p className="label-1 font-semibold">Fast Delivery</p>
+                  <p className="label-2 text-muted-foreground">Across East Africa</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -59,8 +60,8 @@ export const HeroSection = () => {
                   <BookOpen className="h-5 w-5 text-primary" />
                 </div>
                 <div className="text-left">
-                  <p className="label-1 font-semibold">Quality Books</p>
-                  <p className="label-2 text-muted-foreground">Authentic & verified</p>
+                  <p className="label-1 font-semibold">500+ Titles</p>
+                  <p className="label-2 text-muted-foreground">Quality Publications</p>
                 </div>
               </div>
             </div>
@@ -84,10 +85,10 @@ export const HeroSection = () => {
                       className="img-cover hero-scale"
                     />
                   </div>
-                  <h3 className="font-forum font-normal text-xl mb-1">The Midnight Library</h3>
-                  <p className="text-muted-foreground text-sm mb-2">Matt Haig</p>
+                  <h3 className="font-forum font-normal text-xl mb-1">Featured Title</h3>
+                  <p className="text-muted-foreground text-sm mb-2">Published by Intercen</p>
                   <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-primary">$24.99</span>
+                    <span className="text-xl font-bold text-primary">KES 1,500</span>
                     <div className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-primary text-primary" />
                       <span className="text-sm font-medium">4.8</span>

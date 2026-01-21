@@ -1,162 +1,292 @@
 import { Layout } from '@/components/layout/Layout';
-import { BookOpen, Users, Award, Heart } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
+import { 
+  BookOpen, 
+  Users, 
+  Target, 
+  Heart, 
+  Globe, 
+  Award,
+  Lightbulb,
+  Handshake,
+  ArrowRight
+} from 'lucide-react';
+
+const stats = [
+  { value: '15+', label: 'Years of Excellence' },
+  { value: '500+', label: 'Books Published' },
+  { value: '200+', label: 'Authors Partnered' },
+  { value: '10M+', label: 'Readers Reached' },
+];
+
+const values = [
+  {
+    icon: Lightbulb,
+    title: 'Innovation',
+    description: 'Embracing new ideas and technologies to revolutionize African publishing.',
+  },
+  {
+    icon: Heart,
+    title: 'Passion',
+    description: 'A deep love for literature drives everything we do.',
+  },
+  {
+    icon: Handshake,
+    title: 'Integrity',
+    description: 'Honest, transparent relationships with authors, vendors, and readers.',
+  },
+  {
+    icon: Globe,
+    title: 'Impact',
+    description: 'Creating meaningful change through the power of stories.',
+  },
+];
+
+const team = [
+  {
+    name: 'Dr. James Mwangi',
+    role: 'Founder & CEO',
+    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    name: 'Sarah Odhiambo',
+    role: 'Editorial Director',
+    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    name: 'David Kimani',
+    role: 'Operations Manager',
+    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
+  },
+  {
+    name: 'Grace Wanjiku',
+    role: 'Marketing Lead',
+    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
+  },
+];
 
 const About = () => {
-  const stats = [
-    { label: 'Books Available', value: '10,000+' },
-    { label: 'Happy Readers', value: '50,000+' },
-    { label: 'Authors', value: '2,500+' },
-    { label: 'Years of Service', value: '15+' },
-  ];
-
-  const values = [
-    {
-      icon: BookOpen,
-      title: 'Quality Selection',
-      description: 'We carefully curate our collection to bring you the best books across all genres.',
-    },
-    {
-      icon: Users,
-      title: 'Community First',
-      description: 'Building a community of passionate readers who share their love for books.',
-    },
-    {
-      icon: Award,
-      title: 'Excellence',
-      description: 'Committed to providing exceptional service and authentic books every time.',
-    },
-    {
-      icon: Heart,
-      title: 'Passion for Reading',
-      description: 'We believe in the transformative power of books to inspire and educate.',
-    },
-  ];
-
   return (
     <Layout>
       {/* Hero Section */}
-      <section className="relative bg-gradient-warm overflow-hidden">
+      <section className="relative overflow-hidden bg-gradient-warm py-16 md:py-24">
         <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-20 right-20 w-96 h-96 bg-primary/30 rounded-full blur-3xl" />
-          <div className="absolute bottom-10 left-10 w-64 h-64 bg-secondary/20 rounded-full blur-3xl" />
+          <div className="absolute top-10 right-20 w-80 h-80 bg-primary/30 rounded-full blur-3xl" />
+          <div className="absolute bottom-20 left-10 w-64 h-64 bg-secondary/20 rounded-full blur-3xl" />
         </div>
-
-        <div className="container relative py-16 md:py-24">
+        
+        <div className="container relative">
           <div className="max-w-3xl mx-auto text-center">
-            <p className="section-subtitle">About Us</p>
+            <p className="section-subtitle">Our Story</p>
             <h1 className="headline-1 mb-6">
-              About <span className="text-primary">BookHaven</span>
+              Championing African
+              <span className="block text-primary">Literary Excellence</span>
             </h1>
-            <p className="body-1 text-muted-foreground leading-relaxed">
-              We're more than just a bookstore. We're a community of book lovers dedicated to 
-              connecting readers with stories that inspire, educate, and transform lives.
+            <p className="body-1 text-muted-foreground max-w-2xl mx-auto">
+              Intercen Books is more than a publishing house—we're a movement 
+              dedicated to amplifying African voices and bringing world-class 
+              literature to readers everywhere.
             </p>
           </div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-12 bg-charcoal text-white">
+      <section className="py-12 bg-muted/30 border-y">
         <div className="container">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <div key={index} className="text-center">
-                <p className="text-3xl md:text-4xl font-bold text-primary mb-2">
-                  {stat.value}
-                </p>
-                <p className="text-white/70">{stat.label}</p>
+                <p className="headline-2 text-primary mb-1">{stat.value}</p>
+                <p className="label-1 text-muted-foreground">{stat.label}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Our Story */}
+      {/* Mission & Vision */}
       <section className="py-16 md:py-24">
         <div className="container">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <h2 className="font-serif text-3xl md:text-4xl font-bold mb-6">
-                Our Story
-              </h2>
-              <div className="space-y-4 text-muted-foreground leading-relaxed">
-                <p>
-                  BookHaven was founded with a simple mission: to make quality books accessible 
-                  to everyone in Kenya and beyond. What started as a small corner bookshop has 
-                  grown into one of the region's most trusted online book destinations.
-                </p>
-                <p>
-                  We partner directly with publishers and authors to bring you authentic books 
-                  at fair prices. Our curated collection spans from international bestsellers 
-                  to hidden African literary gems, ensuring there's something for every reader.
-                </p>
-                <p>
-                  Today, we're proud to serve over 50,000 happy readers, delivering books to 
-                  doorsteps across the country. But our mission remains the same: to foster a 
-                  love of reading and make books accessible to all.
-                </p>
-              </div>
-            </div>
-            <div className="relative">
-              <div className="aspect-square rounded-2xl overflow-hidden bg-muted">
-                <img
-                  src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&h=600&fit=crop"
-                  alt="Bookstore interior"
+              <div className="aspect-[4/3] rounded-2xl overflow-hidden mb-6 lg:mb-0">
+                <img 
+                  src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop"
+                  alt="Intercen Books office"
                   className="w-full h-full object-cover"
                 />
               </div>
-              {/* Decorative Element */}
-              <div className="absolute -bottom-6 -right-6 w-48 h-48 bg-primary/10 rounded-2xl -z-10" />
+            </div>
+            
+            <div>
+              <div className="mb-10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
+                    <Target className="h-6 w-6 text-primary" />
+                  </div>
+                  <h2 className="font-forum text-2xl">Our Mission</h2>
+                </div>
+                <p className="body-2 text-muted-foreground">
+                  To discover, nurture, and publish exceptional literary works that 
+                  reflect the richness of African culture and experience, while making 
+                  quality books accessible to readers across the continent and beyond.
+                </p>
+              </div>
+              
+              <div>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
+                    <Globe className="h-6 w-6 text-primary" />
+                  </div>
+                  <h2 className="font-forum text-2xl">Our Vision</h2>
+                </div>
+                <p className="body-2 text-muted-foreground">
+                  To be East Africa's leading publishing house and book marketplace, 
+                  known for quality, innovation, and our commitment to fostering 
+                  a vibrant reading culture across generations.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Our Values */}
+      {/* Publishing Philosophy */}
       <section className="py-16 md:py-24 bg-muted/30">
         <div className="container">
-          <div className="text-center mb-12">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold mb-4">
-              Our Values
-            </h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              The principles that guide everything we do at BookHaven
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <p className="section-subtitle">Philosophy</p>
+            <h2 className="headline-2 mb-4">Our Publishing Philosophy</h2>
+            <p className="body-2 text-muted-foreground">
+              We believe that great books have the power to transform minds, 
+              bridge cultures, and inspire change. Our publishing approach is 
+              guided by these core principles.
             </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <Card className="text-center p-6">
+              <CardContent className="pt-6">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <BookOpen className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-forum text-xl mb-3">Quality First</h3>
+                <p className="text-sm text-muted-foreground">
+                  Every book we publish undergoes rigorous editorial review 
+                  to ensure the highest standards of content and presentation.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card className="text-center p-6">
+              <CardContent className="pt-6">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-forum text-xl mb-3">Author-Centric</h3>
+                <p className="text-sm text-muted-foreground">
+                  We value our authors as true partners, offering fair terms, 
+                  transparent processes, and ongoing support throughout their journey.
+                </p>
+              </CardContent>
+            </Card>
+            
+            <Card className="text-center p-6">
+              <CardContent className="pt-6">
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                  <Award className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="font-forum text-xl mb-3">Cultural Impact</h3>
+                <p className="text-sm text-muted-foreground">
+                  We prioritize stories that celebrate African heritage, 
+                  challenge perspectives, and contribute to our literary landscape.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Values */}
+      <section className="py-16 md:py-24">
+        <div className="container">
+          <div className="text-center mb-12">
+            <p className="section-subtitle">What Drives Us</p>
+            <h2 className="headline-2 mb-4">Our Core Values</h2>
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {values.map((value, index) => (
-              <div
+              <div 
                 key={index}
-                className="bg-card rounded-xl p-6 shadow-soft hover:shadow-card transition-shadow"
+                className="group p-6 rounded-2xl bg-card border hover:shadow-elevated transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center mb-4">
-                  <value.icon className="h-6 w-6 text-primary" />
+                <div className="h-14 w-14 rounded-xl bg-accent flex items-center justify-center mb-4 group-hover:bg-primary transition-colors">
+                  <value.icon className="h-7 w-7 text-primary group-hover:text-primary-foreground transition-colors" />
                 </div>
-                <h3 className="font-serif font-bold text-lg mb-2">{value.title}</h3>
-                <p className="text-muted-foreground text-sm">{value.description}</p>
+                <h3 className="font-forum text-xl mb-2">{value.title}</h3>
+                <p className="text-sm text-muted-foreground">{value.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Contact CTA */}
-      <section className="py-16 md:py-24">
+      {/* Team Section */}
+      <section className="py-16 md:py-24 bg-muted/30">
         <div className="container">
-          <div className="bg-primary rounded-2xl md:rounded-3xl p-8 md:p-12 text-center">
-            <h2 className="font-serif text-3xl md:text-4xl font-bold text-primary-foreground mb-4">
-              Have Questions?
-            </h2>
-            <p className="text-primary-foreground/80 text-lg mb-8 max-w-2xl mx-auto">
-              We'd love to hear from you. Reach out to our friendly team for any 
-              inquiries about orders, partnerships, or just to chat about books!
+          <div className="text-center mb-12">
+            <p className="section-subtitle">Leadership</p>
+            <h2 className="headline-2 mb-4">Meet Our Team</h2>
+            <p className="body-2 text-muted-foreground max-w-2xl mx-auto">
+              Our experienced team combines publishing expertise with a passion 
+              for African literature.
             </p>
-            <a href="mailto:hello@bookhaven.com">
-              <button className="bg-charcoal text-white font-semibold px-8 py-3 rounded-lg hover:bg-charcoal/90 transition-colors">
-                Contact Us
-              </button>
-            </a>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-4xl mx-auto">
+            {team.map((member, index) => (
+              <div key={index} className="text-center group">
+                <div className="w-32 h-32 mx-auto rounded-full overflow-hidden mb-4 ring-4 ring-transparent group-hover:ring-primary/30 transition-all">
+                  <img 
+                    src={member.image}
+                    alt={member.name}
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                  />
+                </div>
+                <h3 className="font-forum text-lg">{member.name}</h3>
+                <p className="text-sm text-muted-foreground">{member.role}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 md:py-24 bg-charcoal text-white">
+        <div className="container">
+          <div className="max-w-3xl mx-auto text-center">
+            <h2 className="headline-2 text-white mb-4">Ready to Work With Us?</h2>
+            <p className="body-2 text-white/70 mb-8">
+              Whether you're an author looking to publish, a vendor seeking partnership, 
+              or a reader exploring great books—we'd love to hear from you.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to="/publish">
+                <Button variant="gold" size="xl" className="gap-2">
+                  Publish With Us
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </Link>
+              <Link to="/books">
+                <Button variant="outline" size="xl" className="border-white/30 text-white hover:bg-white/10">
+                  Browse Books
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </section>

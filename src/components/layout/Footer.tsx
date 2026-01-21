@@ -40,12 +40,12 @@ export const Footer = () => {
                 <BookOpen className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="font-forum text-xl">
-                Book<span className="text-primary">Haven</span>
+                Intercen<span className="text-primary"> Books</span>
               </span>
             </Link>
             <p className="text-white/70 text-sm leading-relaxed mb-6">
-              Your trusted destination for books that inspire, educate, and entertain. 
-              Discover your next great read with us.
+              Your trusted partner in publishing and book retail. 
+              Connecting authors, publishers, and readers across East Africa.
             </p>
             <div className="flex gap-4">
               <a href="#" className="text-white/60 hover:text-primary transition-colors">
@@ -64,13 +64,19 @@ export const Footer = () => {
           <div>
             <h4 className="font-forum text-lg mb-4">Quick Links</h4>
             <ul className="space-y-3">
-              {['Home', 'Books', 'Categories', 'About Us', 'Contact'].map(link => (
-                <li key={link}>
+              {[
+                { label: 'Home', href: '/' },
+                { label: 'Books & Categories', href: '/books' },
+                { label: 'Publish With Us', href: '/publish' },
+                { label: 'Products & Services', href: '/services' },
+                { label: 'About Us', href: '/about' }
+              ].map(link => (
+                <li key={link.label}>
                   <Link 
-                    to={`/${link.toLowerCase().replace(' ', '-')}`}
+                    to={link.href}
                     className="text-white/70 hover:text-primary transition-colors text-sm"
                   >
-                    {link}
+                    {link.label}
                   </Link>
                 </li>
               ))}
@@ -126,7 +132,7 @@ export const Footer = () => {
       <div className="border-t border-white/10">
         <div className="container py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-white/50 text-sm">
-            © 2024 BookHaven. All rights reserved.
+            © 2024 Intercen Books. All rights reserved.
           </p>
           <div className="flex gap-6">
             <Link to="/privacy" className="text-white/50 hover:text-white text-sm">
