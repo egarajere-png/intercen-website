@@ -1,5 +1,5 @@
 CREATE TABLE public.contact_messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     name VARCHAR(255),
     email VARCHAR(255) NOT NULL,

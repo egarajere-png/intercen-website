@@ -1,5 +1,5 @@
 create table public.orders(
-    id uuid primary key default uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_number varchar(50) unique not null,
     user_id uuid references profiles(id) on delete cascade,
     sub_total decimal(10,2) not null,
@@ -8,7 +8,7 @@ create table public.orders(
     discount decimal(10,2) default 0.00,
     total_price decimal(10,2) not null,
     status varchar(50) default 'pending' check (status in('pending', 'processing', 'shipped', 'delivered','completed','cancelled')),
-    payment_status varchar(50) default 'pending' check (oayment_status in('pending','paid','failed','refunded')),
+    payment_status varchar(50) default 'pending' check (payment_status in('pending','paid','failed','refunded')),
     shipping_address text,
     billing_address text,
     payment_method varchar(50),

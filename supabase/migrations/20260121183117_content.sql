@@ -1,5 +1,5 @@
 create table public.content(
-    id uuid primary key default uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title varchar(500) not null,
     subtitle varchar(500),
     description text,
@@ -16,7 +16,7 @@ create table public.content(
     page_count integer,
     price decimal(10,2) default 0.00,
     is_free boolean default false,
-    if_for_sale boolean default false,
+    is_for_sale boolean default false,
     stock_quantity integer default 0,
     isbn varchar(20) unique,
     -- Featured & Discovery
@@ -67,4 +67,4 @@ CREATE INDEX idx_content_published ON content(published_at) WHERE status = 'publ
 
 
 CREATE INDEX idx_content_search ON content USING GIN(search_vector);
-CREATE INDEX idx_content_title_trgm ON content USING GIN(title gin_trgm_ops);
+-- CREATE INDEX idx_content_title_trgm ON content USING GIN(title gin_trgm_ops);

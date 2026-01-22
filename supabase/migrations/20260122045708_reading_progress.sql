@@ -1,5 +1,5 @@
 CREATE TABLE public.reading_progress (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     content_id UUID REFERENCES content(id) ON DELETE CASCADE,
     current_page INTEGER DEFAULT 0,

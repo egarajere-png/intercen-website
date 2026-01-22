@@ -1,5 +1,9 @@
+-- Enable necessary extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- For fuzzy text search
+
 CREATE TABLE public.organizations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     logo_url VARCHAR(500),
     website VARCHAR(255),

@@ -1,5 +1,5 @@
 create table public.publishing_requests(
-    id uuid primary key default uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid references profiles(id) on delete cascade,
     title varchar(500) not null,
     description text,
