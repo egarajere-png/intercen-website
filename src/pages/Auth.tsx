@@ -23,11 +23,36 @@ const Auth = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate sign up
-    setTimeout(() => {
+
+    // Get form values
+    const form = e.target as HTMLFormElement;
+    const full_name = (form.elements.namedItem('name') as HTMLInputElement).value;
+    const email = (form.elements.namedItem('signup-email') as HTMLInputElement).value;
+    const password = (form.elements.namedItem('signup-password') as HTMLInputElement).value;
+
+    try {
+      // Use relative path for production, localhost for local dev
+      const isLocal = window.location.hostname === 'localhost';
+      const baseUrl = isLocal ? 'http://localhost:54321' : '';
+      const res = await fetch(`${baseUrl}/functions/v1/auth-register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, full_name }),
+      });
+      let data = {};
+      try {
+        data = await res.json();
+      } catch {}
+      if (!res.ok) {
+        throw new Error((data as any).error || 'Registration failed');
+      }
+      toast.success('Account created! Please check your email to verify your account.');
+      form.reset();
+    } catch (err: any) {
+      toast.error(err.message || 'Registration failed');
+    } finally {
       setIsLoading(false);
-      toast.info('Sign up requires authentication setup. Enable Cloud to add authentication.');
-    }, 1000);
+    }
   };
 
   const handleGoogleSignIn = () => {
