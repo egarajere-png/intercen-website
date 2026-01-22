@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, User, Menu, X, BookOpen } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useCart } from '@/contexts/CartContext';
 import { Badge } from '@/components/ui/badge';
+import intercenLogo from '@/assets/intercen-books-logo.png';
 
 const navLinks = [
   { href: '/', label: 'Home' },
@@ -27,12 +28,11 @@ export const Header = () => {
       <div className="container flex h-16 items-center justify-between md:h-20">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-gold transition-transform group-hover:scale-105">
-            <BookOpen className="h-5 w-5 text-primary-foreground" />
-          </div>
-          <span className="font-forum text-xl tracking-tight md:text-2xl">
-            Intercen<span className="text-primary"> Books</span>
-          </span>
+          <img 
+            src={intercenLogo} 
+            alt="InterCEN Books" 
+            className="h-10 md:h-12 w-auto transition-transform group-hover:scale-105"
+          />
         </Link>
 
         {/* Desktop Navigation */}

@@ -11,7 +11,10 @@ import {
   Award,
   Lightbulb,
   Handshake,
-  ArrowRight
+  ArrowRight,
+  Languages,
+  FileText,
+  Lock
 } from 'lucide-react';
 
 const stats = [
@@ -46,32 +49,47 @@ const values = [
 
 const team = [
   {
-    name: 'Dr. James Mwangi',
+    name: 'Barack Wandera',
     role: 'Founder & CEO',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face',
   },
   {
-    name: 'Sarah Odhiambo',
-    role: 'Editorial Director',
-    image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&h=200&fit=crop&crop=face',
-  },
-  {
-    name: 'David Kimani',
+    name: 'Miriam Achiso',
     role: 'Operations Manager',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=200&h=200&fit=crop&crop=face',
   },
   {
-    name: 'Grace Wanjiku',
-    role: 'Marketing Lead',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=200&h=200&fit=crop&crop=face',
+    name: 'Chelangat Naomi',
+    role: 'Editorial Director',
   },
+  {
+    name: 'Robert Mutugi',
+    role: 'Design Operations Lead',
+  },
+  {
+    name: 'Kelvin Nyakeriga',
+    role: 'Marketing Lead',
+  },
+  {
+    name: 'Jere Egara',
+    role: 'IT Lead & Digital Publishing Systems Manager',
+  },
+];
+
+const translationDocuments = [
+  "Books and manuscripts",
+  "Educational and academic materials",
+  "Contracts and legal documents",
+  "Brochures and press releases",
+  "Reference materials",
+  "PowerPoint presentations",
+  "Internal corporate communications",
+  "User manuals and newsletters"
 ];
 
 const About = () => {
   return (
     <Layout>
       {/* Hero Section */}
-      <section className="relative overflow-hidden bg-gradient-warm py-16 md:py-24">
+      <section className="relative overflow-hidden bg-gradient-hero py-16 md:py-24">
         <div className="absolute inset-0 opacity-20">
           <div className="absolute top-10 right-20 w-80 h-80 bg-primary/30 rounded-full blur-3xl" />
           <div className="absolute bottom-20 left-10 w-64 h-64 bg-secondary/20 rounded-full blur-3xl" />
@@ -85,7 +103,7 @@ const About = () => {
               <span className="block text-primary">Literary Excellence</span>
             </h1>
             <p className="body-1 text-muted-foreground max-w-2xl mx-auto">
-              Intercen Books is more than a publishing house—we're a movement 
+              InterCEN Books is more than a publishing house—we're a movement 
               dedicated to amplifying African voices and bringing world-class 
               literature to readers everywhere.
             </p>
@@ -115,7 +133,7 @@ const About = () => {
               <div className="aspect-[4/3] rounded-2xl overflow-hidden mb-6 lg:mb-0">
                 <img 
                   src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop"
-                  alt="Intercen Books office"
+                  alt="InterCEN Books office"
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -124,7 +142,7 @@ const About = () => {
             <div>
               <div className="mb-10">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Target className="h-6 w-6 text-primary" />
                   </div>
                   <h2 className="font-forum text-2xl">Our Mission</h2>
@@ -138,8 +156,8 @@ const About = () => {
               
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center">
-                    <Globe className="h-6 w-6 text-primary" />
+                  <div className="h-12 w-12 rounded-xl bg-secondary/10 flex items-center justify-center">
+                    <Globe className="h-6 w-6 text-secondary" />
                   </div>
                   <h2 className="font-forum text-2xl">Our Vision</h2>
                 </div>
@@ -183,8 +201,8 @@ const About = () => {
             
             <Card className="text-center p-6">
               <CardContent className="pt-6">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-8 w-8 text-primary" />
+                <div className="h-16 w-16 rounded-full bg-secondary/10 flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-8 w-8 text-secondary" />
                 </div>
                 <h3 className="font-forum text-xl mb-3">Author-Centric</h3>
                 <p className="text-sm text-muted-foreground">
@@ -196,8 +214,8 @@ const About = () => {
             
             <Card className="text-center p-6">
               <CardContent className="pt-6">
-                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <Award className="h-8 w-8 text-primary" />
+                <div className="h-16 w-16 rounded-full bg-accent/30 flex items-center justify-center mx-auto mb-4">
+                  <Award className="h-8 w-8 text-accent-foreground" />
                 </div>
                 <h3 className="font-forum text-xl mb-3">Cultural Impact</h3>
                 <p className="text-sm text-muted-foreground">
@@ -224,7 +242,7 @@ const About = () => {
                 key={index}
                 className="group p-6 rounded-2xl bg-card border hover:shadow-elevated transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="h-14 w-14 rounded-xl bg-accent flex items-center justify-center mb-4 group-hover:bg-primary transition-colors">
+                <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary transition-colors">
                   <value.icon className="h-7 w-7 text-primary group-hover:text-primary-foreground transition-colors" />
                 </div>
                 <h3 className="font-forum text-xl mb-2">{value.title}</h3>
@@ -235,8 +253,103 @@ const About = () => {
         </div>
       </section>
 
-      {/* Team Section */}
+      {/* Translation Services */}
       <section className="py-16 md:py-24 bg-muted/30">
+        <div className="container">
+          <div className="max-w-3xl mx-auto text-center mb-12">
+            <p className="section-subtitle">Global Reach</p>
+            <h2 className="headline-2 mb-4">Translation Services</h2>
+            <p className="body-2 text-muted-foreground">
+              At InterCEN Books, we collaborate with a global network of highly skilled native-language translators, 
+              carefully selected based on their subject-matter expertise.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-12 items-start">
+            {/* Translation Overview */}
+            <div className="space-y-6">
+              <div className="p-6 bg-card rounded-2xl border">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Languages className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-forum text-xl mb-2">Expert Translators</h3>
+                    <p className="text-sm text-muted-foreground">
+                      All our translators hold degrees in translation or linguistics and have a minimum of 
+                      five years of professional experience. From general book translations to highly specialized 
+                      academic, educational, and technical content in multiple languages.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-card rounded-2xl border">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-secondary/10 flex items-center justify-center shrink-0">
+                    <Lock className="h-6 w-6 text-secondary" />
+                  </div>
+                  <div>
+                    <h3 className="font-forum text-xl mb-2">Strict Confidentiality</h3>
+                    <p className="text-sm text-muted-foreground">
+                      InterCEN Books is fully committed to maintaining strict confidentiality for all manuscripts 
+                      and documents entrusted to us. Our translators operate under binding confidentiality agreements, 
+                      ensuring the protection of your intellectual property at every stage.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 bg-card rounded-2xl border">
+                <div className="flex items-start gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-accent/30 flex items-center justify-center shrink-0">
+                    <Globe className="h-6 w-6 text-accent-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-forum text-xl mb-2">Website Translation & Localization</h3>
+                    <p className="text-sm text-muted-foreground">
+                      A website represents a publisher's global identity. We ensure websites are not only 
+                      accurately translated but also culturally adapted to resonate with diverse audiences—
+                      considering language, tone, reading habits, and cultural expectations.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Document Types */}
+            <div className="p-8 bg-card rounded-2xl border">
+              <div className="flex items-center gap-3 mb-6">
+                <FileText className="h-6 w-6 text-primary" />
+                <h3 className="font-forum text-xl">Document Translation</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mb-6">
+                We translate a wide range of documents in any format, including:
+              </p>
+              <ul className="grid sm:grid-cols-2 gap-3">
+                {translationDocuments.map((doc, index) => (
+                  <li key={index} className="flex items-center gap-2 text-sm">
+                    <div className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                    {doc}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-8 pt-6 border-t">
+                <p className="text-sm text-muted-foreground mb-4">
+                  We guarantee exceptional quality and timely delivery of all translated materials.
+                </p>
+                <Button variant="default" className="gap-2">
+                  Request Translation Quote
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Team Section */}
+      <section className="py-16 md:py-24">
         <div className="container">
           <div className="text-center mb-12">
             <p className="section-subtitle">Leadership</p>
@@ -247,15 +360,13 @@ const About = () => {
             </p>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 max-w-4xl mx-auto">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {team.map((member, index) => (
-              <div key={index} className="text-center group">
-                <div className="w-32 h-32 mx-auto rounded-full overflow-hidden mb-4 ring-4 ring-transparent group-hover:ring-primary/30 transition-all">
-                  <img 
-                    src={member.image}
-                    alt={member.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                  />
+              <div key={index} className="text-center group p-6 rounded-2xl bg-card border hover:shadow-elevated transition-all duration-300">
+                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-4 ring-4 ring-transparent group-hover:ring-primary/30 transition-all">
+                  <span className="font-forum text-2xl text-primary">
+                    {member.name.split(' ').map(n => n[0]).join('')}
+                  </span>
                 </div>
                 <h3 className="font-forum text-lg">{member.name}</h3>
                 <p className="text-sm text-muted-foreground">{member.role}</p>
@@ -276,7 +387,7 @@ const About = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/publish">
-                <Button variant="gold" size="xl" className="gap-2">
+                <Button variant="default" size="xl" className="gap-2 bg-primary hover:bg-primary/90">
                   Publish With Us
                   <ArrowRight className="h-5 w-5" />
                 </Button>
