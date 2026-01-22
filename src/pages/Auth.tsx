@@ -33,11 +33,15 @@ const Auth = () => {
     try {
       // Use Supabase Functions URL for both local and production
       const isLocal = window.location.hostname === 'localhost';
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
-      const baseUrl = isLocal
+      // Get Supabase URL from env (Vite style only)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      if (!supabaseUrl && !isLocal) {
+        throw new Error('Supabase URL is not set in environment variables.');
+      }
+      const endpoint = isLocal
         ? 'http://localhost:54321/functions/v1/auth-register'
         : `${supabaseUrl}/functions/v1/auth-register`;
-      const res = await fetch(baseUrl, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name }),
