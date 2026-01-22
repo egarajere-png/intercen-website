@@ -6,4 +6,4 @@ create table public.cart_items(
     price decimal (10,2) not null,
     added_at timetstamp with time zone default now(),
     unique(cart_id, content_id)
-)
+);
