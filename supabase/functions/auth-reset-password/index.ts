@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     console.log('User found:', userData.id)
 
     // Generate secure reset token and expiry (1 hour)
-    const token = generateSecureToken()
+    const token = uuidv4.generate()
     const expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
     console.log('Generated token (first 10 chars):', token.substring(0, 10))

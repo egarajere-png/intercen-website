@@ -8,51 +8,60 @@
 
 @layer base {
   :root {
-    /* Brand Colors - Warm Yellow, White, Red - RETAINED */
-    --background: 48 100% 99%;
-    --foreground: 20 14% 15%;
+    /* InterCEN Books Brand Colors - Based on Logo */
+    /* Logo colors: Black, Lime Green, Yellow/Gold, Red, Orange, Blue */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 20 14% 15%;
+    --card-foreground: 0 0% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 20 14% 15%;
+    --popover-foreground: 0 0% 8%;
 
-    /* Primary - Warm Golden Yellow */
-    --primary: 45 93% 47%;
-    --primary-foreground: 20 14% 10%;
+    /* Primary - Vibrant Red (from logo center) */
+    --primary: 0 85% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Rich Crimson Red */
-    --secondary: 0 84% 50%;
+    /* Secondary - Lime Green (from logo pencil) */
+    --secondary: 75 70% 45%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Muted - Warm Gray */
-    --muted: 40 20% 96%;
-    --muted-foreground: 20 10% 45%;
+    /* Muted - Light Gray */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
 
-    /* Accent - Light Gold */
-    --accent: 45 100% 94%;
-    --accent-foreground: 20 14% 15%;
+    /* Accent - Warm Orange/Gold (from logo book) */
+    --accent: 35 95% 55%;
+    --accent-foreground: 0 0% 8%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 40 30% 90%;
-    --input: 40 30% 90%;
-    --ring: 45 93% 47%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 85% 50%;
 
     --radius: 0.75rem;
     --radius-24: 24px;
 
-    /* Custom BookHaven Tokens */
-    --gold: 45 93% 47%;
+    /* InterCEN Brand Tokens */
+    --intercen-red: 0 85% 50%;
+    --intercen-green: 75 70% 45%;
+    --intercen-yellow: 48 95% 55%;
+    --intercen-orange: 35 95% 55%;
+    --intercen-blue: 200 80% 50%;
+    --intercen-black: 0 0% 8%;
+    
+    /* Legacy tokens - mapped to new brand */
+    --gold: 35 95% 55%;
     --gold-light: 45 100% 94%;
-    --gold-dark: 45 93% 35%;
-    --crimson: 0 84% 50%;
-    --crimson-light: 0 84% 95%;
-    --crimson-dark: 0 84% 40%;
-    --cream: 48 100% 99%;
-    --charcoal: 20 14% 15%;
+    --gold-dark: 35 95% 40%;
+    --crimson: 0 85% 50%;
+    --crimson-light: 0 85% 95%;
+    --crimson-dark: 0 85% 40%;
+    --cream: 0 0% 99%;
+    --charcoal: 0 0% 15%;
 
     /* Smoky Blacks for overlays */
     --smoky-black-1: 40 12% 5%;
@@ -77,15 +86,15 @@
 
     /* Shadows */
     --shadow-elegant: 0px 0px 25px 0px hsla(0, 0%, 0%, 0.1);
-    --shadow-soft: 0 4px 20px -4px hsl(20 14% 15% / 0.08);
-    --shadow-card: 0 8px 30px -8px hsl(20 14% 15% / 0.12);
-    --shadow-elevated: 0 20px 50px -15px hsl(20 14% 15% / 0.15);
-    --shadow-gold: 0 8px 30px -8px hsl(45 93% 47% / 0.3);
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 15% / 0.08);
+    --shadow-card: 0 8px 30px -8px hsl(0 0% 15% / 0.12);
+    --shadow-elevated: 0 20px 50px -15px hsl(0 0% 15% / 0.15);
+    --shadow-primary: 0 8px 30px -8px hsl(0 85% 50% / 0.3);
 
     /* Gradients */
     --gradient-overlay: linear-gradient(to top, hsla(0, 0%, 0%, 0.9), hsla(0, 0%, 0%, 0.7), transparent);
-    --gradient-gold: linear-gradient(135deg, hsl(45 93% 55%) 0%, hsl(45 93% 47%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(45 93% 47% / 0.1) 0%, hsl(0 84% 50% / 0.05) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(0 85% 55%) 0%, hsl(0 85% 45%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(0 85% 50% / 0.05) 0%, hsl(35 95% 55% / 0.05) 100%);
     --gradient-warm: linear-gradient(180deg, hsl(48 100% 99%) 0%, hsl(45 100% 96%) 100%);
 
     --sidebar-background: 0 0% 98%;
