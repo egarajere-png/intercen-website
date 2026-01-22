@@ -53,3 +53,18 @@ create table public.content(
     published_at TIMESTAMP WITH TIME ZONE
 
 );
+
+CREATE INDEX idx_content_type ON content(content_type);
+CREATE INDEX idx_content_status ON content(status);
+CREATE INDEX idx_content_visibility ON content(visibility);
+CREATE INDEX idx_content_category ON content(category_id);
+CREATE INDEX idx_content_uploader ON content(uploaded_by);
+CREATE INDEX idx_content_organization ON content(organization_id);
+CREATE INDEX idx_content_is_for_sale ON content(is_for_sale);
+CREATE INDEX idx_content_featured ON content(is_featured) WHERE is_featured = TRUE;
+CREATE INDEX idx_content_bestseller ON content(is_bestseller) WHERE is_bestseller = TRUE;
+CREATE INDEX idx_content_published ON content(published_at) WHERE status = 'published';
+
+
+CREATE INDEX idx_content_search ON content USING GIN(search_vector);
+CREATE INDEX idx_content_title_trgm ON content USING GIN(title gin_trgm_ops);

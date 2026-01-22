@@ -6,3 +6,5 @@ CREATE TABLE public.collection_items (
     notes TEXT,
     UNIQUE(collection_id, content_id)
 );
+CREATE INDEX idx_collection_items_collection ON collection_items(collection_id);
+CREATE INDEX idx_collection_items_content ON collection_items(content_id);

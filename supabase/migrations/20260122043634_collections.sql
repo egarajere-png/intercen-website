@@ -9,3 +9,7 @@ create table public.collections(
     created_at timestamp with time zone default now(),
     updated_at timestamp with time zone default now()
 );
+
+CREATE INDEX idx_collections_user ON collections(user_id);
+CREATE INDEX idx_collections_org ON collections(organization_id);
+

@@ -7,3 +7,5 @@ create table public.cart_items(
     added_at timetstamp with time zone default now(),
     unique(cart_id, content_id)
 );
+
+CREATE INDEX idx_cart_items_cart ON cart_items(cart_id);
