@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { BookOpen, Facebook, Twitter, Instagram, Mail, Phone, MapPin } from 'lucide-react';
+import { Facebook, Twitter, Instagram, Mail, Phone, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import intercenLogo from '@/assets/intercen-books-logo.png';
 
 export const Footer = () => {
   return (
@@ -36,12 +37,11 @@ export const Footer = () => {
           {/* Brand */}
           <div className="lg:col-span-1">
             <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-                <BookOpen className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="font-forum text-xl">
-                Intercen<span className="text-primary"> Books</span>
-              </span>
+              <img 
+                src={intercenLogo} 
+                alt="InterCEN Books" 
+                className="h-10 w-auto brightness-0 invert"
+              />
             </Link>
             <p className="text-white/70 text-sm leading-relaxed mb-6">
               Your trusted partner in publishing and book retail. 
@@ -119,8 +119,8 @@ export const Footer = () => {
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="h-5 w-5 text-primary shrink-0" />
-                <a href="mailto:hello@bookhaven.com" className="text-white/70 hover:text-primary text-sm">
-                  hello@bookhaven.com
+                <a href="mailto:hello@intercenbooks.com" className="text-white/70 hover:text-primary text-sm">
+                  hello@intercenbooks.com
                 </a>
               </li>
             </ul>
@@ -132,7 +132,7 @@ export const Footer = () => {
       <div className="border-t border-white/10">
         <div className="container py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-white/50 text-sm">
-            © 2024 Intercen Books. All rights reserved.
+            © 2024 InterCEN Books. All rights reserved.
           </p>
           <div className="flex gap-6">
             <Link to="/privacy" className="text-white/50 hover:text-white text-sm">

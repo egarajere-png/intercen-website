@@ -91,6 +91,13 @@ Deno.serve(async (req) => {
     const user = signUpData.user
     const session = signUpData.session
 
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to create user.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // 2. Insert into profiles table (see your 20260121145931_profiles.sql migration)
     // The profiles table should have at least: id (uuid), full_name (text), email (text)
     const { error: profileError } = await supabase

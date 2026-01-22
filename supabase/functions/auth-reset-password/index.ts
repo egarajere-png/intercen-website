@@ -2,7 +2,7 @@
 
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { v4 as uuidv4 } from 'https://deno.land/std@0.203.0/uuid/mod.ts'
+import { crypto } from "https://deno.land/std@0.203.0/crypto/mod.ts"
 
 // Helper: Validate email format
 function isValidEmail(email: string): boolean {
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     }
 
     // Generate secure reset token and expiry (1 hour)
-    const token = uuidv4.generate()
+    const token = crypto.randomUUID()
     const expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString()
 
     // Store token in password_reset_tokens table
