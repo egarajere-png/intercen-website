@@ -16,6 +16,12 @@ const Auth = () => {
 
   // Helper to get the correct endpoint URL
   const getEndpointUrl = (functionName: string) => {
+    // TEMPORARY: Force production for testing
+    // Remove this and uncomment the code below when local Supabase is running
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nnljrawwhibazudjudht.supabase.co';
+    return `${supabaseUrl}/functions/v1/${functionName}`;
+
+    /* UNCOMMENT THIS FOR LOCAL DEVELOPMENT:
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     
     if (isLocal) {
@@ -29,6 +35,7 @@ const Auth = () => {
       }
       return `${supabaseUrl}/functions/v1/${functionName}`;
     }
+    */
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -36,11 +43,21 @@ const Auth = () => {
     setIsLoading(true);
 
     const form = e.target as HTMLFormElement;
-    const email = (form.elements.namedItem('email') as HTMLInputElement).value;
-    const password = (form.elements.namedItem('password') as HTMLInputElement).value;
+    const email = (form.elements.namedItem('email') as HTMLInputElement)?.value;
+    const password = (form.elements.namedItem('password') as HTMLInputElement)?.value;
+
+    console.log('Sign in attempt:', { email, password: '***' });
+
+    if (!email || !password) {
+      toast.error('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const endpoint = getEndpointUrl('auth-login');
+      console.log('Calling:', endpoint);
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,6 +65,7 @@ const Auth = () => {
       });
 
       const data = await res.json();
+      console.log('Response:', { status: res.status, data });
 
       if (!res.ok) {
         throw new Error(data.error || 'Login failed');
@@ -60,9 +78,9 @@ const Auth = () => {
       }
 
       toast.success('Welcome back!');
-      // Navigate to home or dashboard
       navigate('/');
     } catch (err: any) {
+      console.error('Sign in error:', err);
       toast.error(err.message || 'Login failed');
     } finally {
       setIsLoading(false);
@@ -74,16 +92,35 @@ const Auth = () => {
     setIsLoading(true);
 
     const form = e.target as HTMLFormElement;
-    const full_name = (form.elements.namedItem('name') as HTMLInputElement).value;
-    const email = (form.elements.namedItem('signup-email') as HTMLInputElement).value;
-    const password = (form.elements.namedItem('signup-password') as HTMLInputElement).value;
+    const full_name = (form.elements.namedItem('name') as HTMLInputElement)?.value;
+    const email = (form.elements.namedItem('signup-email') as HTMLInputElement)?.value;
+    const password = (form.elements.namedItem('signup-password') as HTMLInputElement)?.value;
+
+    console.log('Sign up attempt:', { full_name, email, password: '***' });
+
+    if (!full_name || !email || !password) {
+      toast.error('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      toast.error('Password must be at least 8 characters');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const endpoint = getEndpointUrl('auth-register');
+      console.log('Calling:', endpoint);
+
+      const payload = { email, password, full_name };
+      console.log('Payload:', { ...payload, password: '***' });
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, full_name }),
+        body: JSON.stringify(payload),
       });
 
       let data;
@@ -103,14 +140,14 @@ const Auth = () => {
       toast.success('Account created! Please check your email to verify your account.');
       form.reset();
       
-      // Optionally switch to sign-in tab
-      // Or auto-login if session is returned
+      // Auto-login if session is returned
       if (data.session) {
         localStorage.setItem('session', JSON.stringify(data.session));
         localStorage.setItem('user', JSON.stringify(data.user));
         navigate('/');
       }
     } catch (err: any) {
+      console.error('Registration error:', err);
       toast.error(err.message || 'Registration failed');
     } finally {
       setIsLoading(false);
@@ -122,7 +159,13 @@ const Auth = () => {
     setIsLoading(true);
 
     const form = e.target as HTMLFormElement;
-    const email = (form.elements.namedItem('reset-email') as HTMLInputElement).value;
+    const email = (form.elements.namedItem('reset-email') as HTMLInputElement)?.value;
+
+    if (!email) {
+      toast.error('Please enter your email');
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const endpoint = getEndpointUrl('auth-reset-password');
@@ -228,6 +271,7 @@ const Auth = () => {
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="reset-email" 
+                      name="reset-email"
                       type="email" 
                       placeholder="you@example.com" 
                       className="pl-10"
