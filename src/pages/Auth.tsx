@@ -16,26 +16,10 @@ const Auth = () => {
 
   // Helper to get the correct endpoint URL
   const getEndpointUrl = (functionName: string) => {
-    // TEMPORARY: Force production for testing
-    // Remove this and uncomment the code below when local Supabase is running
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nnljrawwhibazudjudht.supabase.co';
-    return `${supabaseUrl}/functions/v1/${functionName}`;
-
-    /* UNCOMMENT THIS FOR LOCAL DEVELOPMENT:
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    if (isLocal) {
-      // Local Supabase development
-      return `http://localhost:54321/functions/v1/${functionName}`;
-    } else {
-      // Production - use environment variable
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      if (!supabaseUrl) {
-        throw new Error('VITE_SUPABASE_URL is not set in environment variables');
-      }
-      return `${supabaseUrl}/functions/v1/${functionName}`;
-    }
-    */
+    // Remove trailing slash if it exists to prevent double slashes
+    const cleanUrl = supabaseUrl.replace(/\/$/, '');
+    return `${cleanUrl}/functions/v1/${functionName}`;
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -161,6 +145,8 @@ const Auth = () => {
     const form = e.target as HTMLFormElement;
     const email = (form.elements.namedItem('reset-email') as HTMLInputElement)?.value;
 
+    console.log('Password reset attempt:', { email });
+
     if (!email) {
       toast.error('Please enter your email');
       setIsLoading(false);
@@ -169,16 +155,19 @@ const Auth = () => {
 
     try {
       const endpoint = getEndpointUrl('auth-reset-password');
+      console.log('Calling:', endpoint);
+
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        headers: { 
+          'Content-Type': 'application/json'
+          // DO NOT send Authorization header for public reset password endpoint
         },
         body: JSON.stringify({ email }),
       });
 
       const data = await res.json();
+      console.log('Reset password response:', { status: res.status, data });
 
       if (!res.ok) {
         throw new Error(data.error || 'Failed to send reset email');
@@ -188,6 +177,7 @@ const Auth = () => {
       form.reset();
       setShowResetPassword(false);
     } catch (err: any) {
+      console.error('Reset password error:', err);
       toast.error(err.message || 'Failed to send reset email');
     } finally {
       setIsLoading(false);
