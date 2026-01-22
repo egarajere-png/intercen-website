@@ -1,0 +1,20 @@
+create table public.orders(
+    id uuid primary key default uuid_generate_v4(),
+    order_number varchar(50) unique not null,
+    user_id uuid references profiles(id) on delete cascade,
+    sub_total decimal(10,2) not null,
+    tax decimal(10,2) default 0.00,
+    shipping decimal(10,2) default 0.00,
+    discount decimal(10,2) default 0.00,
+    total_price decimal(10,2) not null,
+    status varchar(50) default 'pending' check (status in('pending', 'processing', 'shipped', 'delivered','completed','cancelled')),
+    payment_status varchar(50) default 'pending' check (oayment_status in('pending','paid','failed','refunded')),
+    shipping_address text,
+    billing_address text,
+    payment_method varchar(50),
+    payment_reference varchar(255),
+    created_at timestamp with time zone default now(),
+    updated_at timestamp with time zone default now(),
+    completed_at timestamp with time zone,
+    cancelled_at timestamp with time zone
+);
