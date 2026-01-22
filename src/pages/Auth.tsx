@@ -31,10 +31,13 @@ const Auth = () => {
     const password = (form.elements.namedItem('signup-password') as HTMLInputElement).value;
 
     try {
-      // Use relative path for production, localhost for local dev
+      // Use Supabase Functions URL for both local and production
       const isLocal = window.location.hostname === 'localhost';
-      const baseUrl = isLocal ? 'http://localhost:54321' : '';
-      const res = await fetch(`${baseUrl}/functions/v1/auth-register`, {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL;
+      const baseUrl = isLocal
+        ? 'http://localhost:54321/functions/v1/auth-register'
+        : `${supabaseUrl}/functions/v1/auth-register`;
+      const res = await fetch(baseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name }),
