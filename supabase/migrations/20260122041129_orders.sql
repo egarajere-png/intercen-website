@@ -18,3 +18,8 @@ create table public.orders(
     completed_at timestamp with time zone,
     cancelled_at timestamp with time zone
 );
+
+
+CREATE INDEX idx_orders_user ON orders(user_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_orders_created ON orders(created_at DESC);

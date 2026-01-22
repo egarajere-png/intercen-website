@@ -6,3 +6,6 @@ CREATE TABLE public.organization_members (
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(organization_id, user_id)
 );
+
+CREATE INDEX idx_org_members_org ON organization_members(organization_id);
+CREATE INDEX idx_org_members_user ON organization_members(user_id);

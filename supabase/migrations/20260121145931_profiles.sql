@@ -13,3 +13,6 @@ create table public.profiles(
   created_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()
 );
+
+CREATE INDEX idx_profiles_role ON profiles(role);
+CREATE INDEX idx_profiles_account_type ON profiles(account_type);
