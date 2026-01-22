@@ -17,6 +17,4 @@ create table public.orders(
     updated_at timestamp with time zone default now(),
     completed_at timestamp with time zone,
     cancelled_at timestamp with time zone
-
-
 );
