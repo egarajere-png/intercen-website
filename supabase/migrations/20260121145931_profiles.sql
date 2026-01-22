@@ -16,3 +16,7 @@ create table public.profiles(
 
 CREATE INDEX idx_profiles_role ON profiles(role);
 CREATE INDEX idx_profiles_account_type ON profiles(account_type);
+
+-- Enable necessary extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm"; -- For fuzzy text search

@@ -1,5 +1,5 @@
 CREATE TABLE public.reviews (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     content_id UUID REFERENCES content(id) ON DELETE CASCADE,
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
@@ -32,4 +32,4 @@ $$ language plpgsql;
 
 create trigger update_rating_on_review
     AFTER INSERT OR UPDATE OR DELETE ON reviews
-    for each row excecute function update_content_rating();
+    for each row execute function update_content_rating();

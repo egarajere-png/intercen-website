@@ -1,5 +1,5 @@
 create table public.banners(
-    id uuid primary key default uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title varchar(255) not null,
     subtitle varchar(255),
     description text,

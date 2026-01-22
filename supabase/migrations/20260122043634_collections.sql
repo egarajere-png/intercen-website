@@ -1,5 +1,5 @@
 create table public.collections(
-    id uuid primary key default uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name varchar(255)not null,
     description text,
     user_id uuid references profiles (id) on delete cascade,
