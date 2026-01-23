@@ -35,7 +35,7 @@ const App = () => (
             <Route path="/publish" element={<PublishWithUs />} />
             <Route path="/services" element={<ProductsServices />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/change-password" element={
+            <Route path="/reset-password" element={
               <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
                 <PasswordChange />
               </Suspense>
