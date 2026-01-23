@@ -45,7 +45,7 @@ export default function ProfileSetup() {
   const [accountType, setAccountType] = useState<'personal' | 'corporate' | 'institutional'>('personal');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [avatarBase64, setAvatarBase64] = useState<string | null>(null); // ← new state
+  const [avatarBase64, setAvatarBase64] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -106,7 +106,7 @@ export default function ProfileSetup() {
     }
 
     try {
-      setLoading(true); // optional: show spinner during conversion
+      setLoading(true);
       const base64 = await convertFileToBase64(file);
       setAvatarBase64(base64);
       setAvatarFile(file);
@@ -141,6 +141,20 @@ export default function ProfileSetup() {
     department.trim() !== '' ||
     avatarBase64 !== null;
 
+  const refreshProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to refresh profile after update:', error);
+      return null;
+    }
+    return data;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -156,9 +170,11 @@ export default function ProfileSetup() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      if (!session?.user?.id || !session?.access_token) {
         throw new Error('Not authenticated. Please sign in again.');
       }
+
+      const userId = session.user.id;
 
       const payload: Record<string, any> = {
         full_name: fullName.trim() || undefined,
@@ -171,17 +187,27 @@ export default function ProfileSetup() {
       };
 
       if (avatarBase64) {
-        payload.avatar_base64 = avatarBase64; // ← now correct data: URI
+        payload.avatar_base64 = avatarBase64;
       }
 
-      const { data, error } = await supabase.functions.invoke('profile-update', {
+      const { data: functionData, error: functionError } = await supabase.functions.invoke('profile-update', {
         body: payload,
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
 
-      if (error) throw error;
+      if (functionError) {
+        throw functionError;
+      }
+
+      // After successful update → refresh profile to confirm
+      const freshProfile = await refreshProfile(userId);
+
+      if (!freshProfile && !functionData?.profile) {
+        console.warn('Profile row still not found after update — possible race condition or function issue');
+        // You can decide whether to still show success or show a softer warning
+      }
 
       toast({
         title: 'Profile saved',
