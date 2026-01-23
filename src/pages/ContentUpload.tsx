@@ -6,12 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { supabase } from '@/lib/SupabaseClient';  // Adjust path if needed
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024;  // 10MB
