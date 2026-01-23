@@ -1,32 +1,69 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lock, ArrowLeft, BookOpen, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const PasswordChange = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  const location = useLocation();
+  
+  // Supabase sends tokens in URL hash: #access_token=...&type=recovery
+  const [isValidToken, setIsValidToken] = useState(false);
+  const [isCheckingToken, setIsCheckingToken] = useState(true);
 
-  // Check if token exists on mount
+  // Extract and validate access token from URL hash on mount
   useEffect(() => {
-    if (!token) {
-      toast.error('Invalid or missing reset token');
-      setTimeout(() => navigate('/auth'), 2000);
-    }
-  }, [token, navigate]);
+    const checkRecoveryToken = async () => {
+      try {
+        // Get hash params from URL (Supabase format: #access_token=...&type=recovery)
+        const hashParams = new URLSearchParams(location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const tokenType = hashParams.get('type');
 
-  const getEndpointUrl = (functionName: string) => {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://nnljrawwhibazudjudht.supabase.co';
-    const cleanUrl = supabaseUrl.replace(/\/$/, '');
-    return `${cleanUrl}/functions/v1/${functionName}`;
-  };
+        console.log('Password reset page loaded');
+        console.log('Token type:', tokenType);
+        console.log('Access token present:', !!accessToken);
+
+        if (tokenType === 'recovery' && accessToken) {
+          console.log('✅ Valid recovery token found in URL');
+          
+          // Verify the session is valid by getting the user
+          const { data: { user }, error } = await supabase.auth.getUser(accessToken);
+          
+          if (error || !user) {
+            console.error('❌ Token validation failed:', error);
+            toast.error('Invalid or expired reset token');
+            setIsValidToken(false);
+            setTimeout(() => navigate('/auth'), 2000);
+          } else {
+            console.log('✅ Token validated successfully for user:', user.id);
+            setIsValidToken(true);
+          }
+        } else {
+          console.log('❌ No valid recovery token found in URL');
+          toast.error('Invalid or missing reset token');
+          setIsValidToken(false);
+          setTimeout(() => navigate('/auth'), 2000);
+        }
+      } catch (err) {
+        console.error('Error checking recovery token:', err);
+        toast.error('Invalid or expired reset token');
+        setIsValidToken(false);
+        setTimeout(() => navigate('/auth'), 2000);
+      } finally {
+        setIsCheckingToken(false);
+      }
+    };
+
+    checkRecoveryToken();
+  }, [location, navigate]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,7 +74,6 @@ const PasswordChange = () => {
     const confirm = (form.elements.namedItem('confirm') as HTMLInputElement)?.value;
 
     console.log('Password change attempt:', {
-      token: token?.substring(0, 10) + '...',
       passwordLength: password?.length,
       confirmMatch: password === confirm
     });
@@ -55,7 +91,6 @@ const PasswordChange = () => {
       return;
     }
 
-    // Check for letter and number
     if (!/[A-Za-z]/.test(password)) {
       toast.error('Password must contain at least one letter');
       setIsLoading(false);
@@ -74,32 +109,21 @@ const PasswordChange = () => {
       return;
     }
 
-    if (!token) {
-      toast.error('Invalid or missing token');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const endpoint = getEndpointUrl('auth-reset-password');
-      console.log('Calling:', endpoint);
+      console.log('Updating password via Supabase Auth...');
 
-      // IMPORTANT: Send as "new_password" not "password"
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token, 
-          new_password: password  // Changed from "password" to "new_password"
-        }),
+      // Use Supabase's updateUser to change password
+      // The session is automatically set from the access_token in the URL hash
+      const { data, error } = await supabase.auth.updateUser({
+        password: password
       });
 
-      const data = await res.json();
-      console.log('Response:', { status: res.status, data });
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Password reset failed');
+      if (error) {
+        console.error('❌ Password update error:', error);
+        throw error;
       }
+
+      console.log('✅ Password updated successfully');
 
       // Success!
       toast.success('Password changed successfully!', {
@@ -110,6 +134,10 @@ const PasswordChange = () => {
       // Clear the form
       form.reset();
       
+      // Sign out the user (they'll need to sign in with new password)
+      await supabase.auth.signOut();
+      console.log('User signed out, redirecting to auth page...');
+      
       // Redirect to sign in after 2 seconds
       setTimeout(() => {
         navigate('/auth');
@@ -117,14 +145,38 @@ const PasswordChange = () => {
 
     } catch (err: any) {
       console.error('Password change error:', err);
-      toast.error(err.message || 'Password reset failed');
+      
+      // Handle specific error cases
+      if (err.message?.includes('session') || err.message?.includes('token')) {
+        toast.error('Reset link has expired. Please request a new one.');
+        setTimeout(() => navigate('/auth'), 2000);
+      } else if (err.message?.includes('Same password')) {
+        toast.error('New password must be different from the current password');
+      } else {
+        toast.error(err.message || 'Password reset failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // If no token, show error state
-  if (!token) {
+  // Show loading state while checking token
+  if (isCheckingToken) {
+    return (
+      <div className="min-h-screen bg-gradient-warm flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
+            <Lock className="h-8 w-8 text-primary animate-pulse" />
+          </div>
+          <h2 className="font-serif text-2xl font-bold mb-2">Verifying Reset Link</h2>
+          <p className="text-muted-foreground">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no valid token, show error state
+  if (!isValidToken) {
     return (
       <div className="min-h-screen bg-gradient-warm flex items-center justify-center p-6">
         <div className="text-center">
@@ -223,7 +275,7 @@ const PasswordChange = () => {
                   <button
                     type="button"
                     tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
@@ -260,7 +312,7 @@ const PasswordChange = () => {
                   <button
                     type="button"
                     tabIndex={-1}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none transition-colors"
                     onClick={() => setShowConfirm((v) => !v)}
                     aria-label={showConfirm ? 'Hide password' : 'Show password'}
                   >
