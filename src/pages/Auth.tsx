@@ -98,7 +98,9 @@ const Auth = () => {
       const endpoint = getEndpointUrl('auth-register');
       console.log('Calling:', endpoint);
 
-      const payload = { email, password, full_name };
+      // Add emailRedirectTo for verification link
+      const emailRedirectTo = `${window.location.origin}/auth/verify-email`;
+      const payload = { email, password, full_name, emailRedirectTo };
       console.log('Payload:', { ...payload, password: '***' });
 
       const res = await fetch(endpoint, {

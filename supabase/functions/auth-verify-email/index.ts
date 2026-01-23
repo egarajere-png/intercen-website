@@ -3,268 +3,189 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Helper: Validate token format (accepts both UUIDs and hex tokens)
-function isValidToken(token: string): boolean {
-  // Accept UUID format (36 chars with hyphens)
-  const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(token)
-  // Accept hex token format (32+ characters)
-  const isHexToken = /^[0-9a-fA-F]{32,}$/.test(token)
-  
-  return isUUID || isHexToken
-}
-
 Deno.serve(async (req) => {
-  console.log('=== Auth Verify Email Request Started ===');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
+  console.log('=== Auth Verify Email Request Started ===')
+  console.log('Method:', req.method)
+  console.log('URL:', req.url)
 
-  // Allow preflight OPTIONS requests for CORS
+  // Handle preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    console.log('OPTIONS request - returning CORS headers');
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Parse request body or query params for token
-  let token = ''
-  
-  if (req.method === 'POST') {
-    console.log('Processing POST request')
-    try {
-      const rawBody = await req.text()
-      console.log('Raw body received:', rawBody)
-      
-      const body = JSON.parse(rawBody)
-      token = body.token
-      console.log('Token from POST body (first 10 chars):', token?.substring(0, 10) || 'MISSING')
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError)
-      return new Response(
-        JSON.stringify({ error: 'Invalid JSON body.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-  } else if (req.method === 'GET') {
-    console.log('Processing GET request')
-    const url = new URL(req.url)
-    token = url.searchParams.get('token') || ''
-    console.log('Token from query params (first 10 chars):', token?.substring(0, 10) || 'MISSING')
-  } else {
-    console.error('Unsupported method:', req.method)
+  // This function now handles Supabase's native confirmation flow
+  // The confirmation email link points here with query params:
+  // ?token_hash=...&type=signup (or type=email)
+
+  const url = new URL(req.url)
+  const token_hash = url.searchParams.get('token_hash')
+  const type = url.searchParams.get('type')
+
+  if (!token_hash || !type) {
+    console.error('Missing required parameters: token_hash or type')
     return new Response(
-      JSON.stringify({ error: 'Method not allowed. Use GET or POST.' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: 'Invalid confirmation link. Missing token or type.' }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     )
   }
 
-  // Validate token
-  if (!token) {
-    console.error('Validation failed: Token missing')
-    return new Response(
-      JSON.stringify({ error: 'Verification token is required.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
+  console.log('Received confirmation request')
+  console.log('Type:', type)
+  console.log('Token hash (first 20 chars):', token_hash.substring(0, 20) + '...')
 
-  if (!isValidToken(token)) {
-    console.error('Validation failed: Invalid token format')
-    return new Response(
-      JSON.stringify({ error: 'Invalid verification token format.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  console.log('Token validation passed')
-
-  // Initialize Supabase client
+  // Initialize Supabase admin client (service role key required)
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
-  const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  
-  if (!supabaseUrl || !supabaseKey) {
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+
+  if (!supabaseUrl || !supabaseServiceKey) {
     console.error('Missing Supabase environment variables')
     return new Response(
       JSON.stringify({ error: 'Server configuration error.' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  console.log('Initializing Supabase client...')
-  const supabase = createClient(supabaseUrl, supabaseKey)
-
-  // 1. Find user by verification token
-  console.log('Looking up user by verification token...')
-  const { data: userData, error: userError } = await supabase
-    .from('profiles')
-    .select('id, email, is_verified, verification_token')
-    .eq('verification_token', token)
-    .single()
-
-  if (userError) {
-    console.error('User lookup error:', userError)
-    return new Response(
-      JSON.stringify({ error: 'Invalid or expired verification token.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  if (!userData) {
-    console.error('No user found with this verification token')
-    return new Response(
-      JSON.stringify({ error: 'Invalid or expired verification token.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  console.log('User found:', userData.id)
-  console.log('Current verification status:', userData.is_verified)
-
-  // Check if already verified
-  if (userData.is_verified) {
-    console.log('User already verified')
-    return new Response(
-      JSON.stringify({
-        message: 'Email already verified.',
-        user: {
-          id: userData.id,
-          email: userData.email,
-          is_verified: true
-        }
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  // 2. Update user verification status and clear the token
-  console.log('Updating verification status...')
-  const { error: updateError } = await supabase
-    .from('profiles')
-    .update({
-      is_verified: true,
-      verification_token: null, // Remove token after use
-      verified_at: new Date().toISOString() // Optional: track when verified
-    })
-    .eq('id', userData.id)
-
-  if (updateError) {
-    console.error('Profile update error:', updateError)
-    return new Response(
-      JSON.stringify({ 
-        error: 'Failed to verify email.',
-        details: updateError.message 
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  }
-
-  console.log('User verified successfully')
-
-  // 3. Update auth user metadata (optional but recommended)
-  console.log('Updating auth user metadata...')
-  try {
-    const { error: authUpdateError } = await supabase.auth.admin.updateUserById(
-      userData.id,
       {
-        email_confirmed_at: new Date().toISOString(),
-        user_metadata: {
-          email_verified: true
-        }
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     )
-
-    if (authUpdateError) {
-      console.warn('Auth metadata update error (non-blocking):', authUpdateError)
-    } else {
-      console.log('Auth metadata updated')
-    }
-  } catch (authError) {
-    console.warn('Auth update failed (non-blocking):', authError)
   }
 
-  // 4. Log verification event in audit_logs (if table exists)
-  console.log('Logging verification event...')
+  const supabase = createClient(supabaseUrl, supabaseServiceKey)
+
+  // Step 1: Verify the OTP token with Supabase Auth (this confirms the email)
+  console.log('Verifying OTP with Supabase Auth...')
+  const { data: authData, error: verifyError } = await supabase.auth.verifyOtp({
+    token_hash,
+    type: type as 'signup' | 'email' | 'recovery' | 'invite' | 'magiclink' | 'email_change',
+  })
+
+  if (verifyError || !authData?.user) {
+    console.error('OTP verification failed:', verifyError?.message)
+    return new Response(
+      JSON.stringify({ error: 'Invalid or expired confirmation link.' }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
+
+  console.log('✅ Email confirmed successfully in Supabase Auth')
+  console.log('User ID:', authData.user.id)
+  console.log('Email:', authData.user.email)
+
+  // Step 2: Update your custom profiles table (mark as verified)
+  console.log('Updating profiles table...')
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, is_verified, verified_at')
+    .eq('id', authData.user.id)
+    .single()
+
+  if (profileError || !profile) {
+    console.warn('Profile not found or error:', profileError?.message)
+    // Continue anyway — email is already confirmed in auth
+  } else if (!profile.is_verified) {
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        is_verified: true,
+        verified_at: new Date().toISOString(),
+      })
+      .eq('id', authData.user.id)
+
+    if (updateError) {
+      console.warn('Failed to update profile verification status:', updateError.message)
+    } else {
+      console.log('✅ Profile marked as verified')
+    }
+  } else {
+    console.log('Profile already marked as verified')
+  }
+
+  // Step 3: (Optional) Log verification event in audit_logs
   try {
     const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
     const { error: auditError } = await supabase
       .from('audit_logs')
-      .insert([
-        {
-          user_id: userData.id,
-          action: 'email_verified',
-          ip_address: ip
-        }
-      ])
+      .insert({
+        user_id: authData.user.id,
+        action: 'email_verified',
+        ip_address: ip,
+        metadata: { method: 'native_confirmation_link' },
+      })
 
-    if (auditError) {
-      console.warn('Audit log creation error (non-blocking):', auditError)
-    } else {
-      console.log('Verification event logged')
-    }
-  } catch (auditException) {
-    console.warn('Audit logging failed (table may not exist):', auditException)
+    if (auditError) console.warn('Audit log failed:', auditError.message)
+    else console.log('Verification event logged')
+  } catch (e) {
+    console.warn('Audit logging skipped (table may not exist)')
   }
 
-  // 5. Send welcome email (placeholder)
-  try {
-    // TODO: Replace with actual email sending logic
-    // await sendWelcomeEmail(userData.email, userData.full_name)
-    console.log('Welcome email would be sent here')
-  } catch (emailError) {
-    console.warn('Welcome email failed (non-blocking):', emailError)
-  }
+  // Step 4: (Optional) Send welcome email here if desired
+  // You can reuse your Resend logic from auth-reset-password if needed
 
-  console.log('Email verification completed successfully')
+  // Step 5: Redirect user to Profile Setup page (they will be logged in automatically)
+  const appUrl = Deno.env.get('APP_URL') || 'https://intercenbooks.vercel.app'
+  const redirectUrl = `${appUrl}/profile-setup`
+
+  console.log('Redirecting user to:', redirectUrl)
   console.log('=== Auth Verify Email Request Completed ===')
 
-  // 6. Respond with success
-  return new Response(
-    JSON.stringify({
-      message: 'Email verified successfully! You can now access all features.',
-      user: {
-        id: userData.id,
-        email: userData.email,
-        is_verified: true
-      }
-    }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  )
+  return new Response(null, {
+    status: 302,
+    headers: {
+      ...corsHeaders,
+      Location: redirectUrl,
+      // Optional: set a cookie or message if needed
+    },
+  })
 })
 
 /*
-CHANGELOG:
-- Added comprehensive logging throughout the function
-- Supports both GET and POST methods
-- Improved token validation (accepts UUIDs and hex tokens)
-- Added environment variable checks
-- Made auxiliary operations non-blocking (auth metadata, audit logs, emails)
-- Added check for already verified users
-- Added verified_at timestamp tracking
-- Updates both profiles table and auth metadata
-- Logs verification events for security
-- Better error handling and messages
+===================================================================================
+SUPABASE NATIVE EMAIL CONFIRMATION + CUSTOM REDIRECT TO /profile-setup
+===================================================================================
 
-KEY FEATURES:
-1. Accepts both GET (query params) and POST (JSON body) requests
-2. Validates token format (UUID or hex)
-3. Updates is_verified in profiles table
-4. Clears verification token after use
-5. Updates Supabase Auth metadata
-6. Logs verification event
-7. Handles already-verified users gracefully
+This function handles the standard Supabase confirmation link:
+https://your-project.supabase.co/auth/v1/verify?token_hash=...&type=signup&redirect_to=...
 
-REQUIRED DATABASE CHANGES:
-Add to profiles table:
-- verification_token (text, nullable)
-- is_verified (boolean, default false)
-- verified_at (timestamptz, nullable)
+But we intercept it by setting emailRedirectTo in signUp() to point here.
 
-INTEGRATION WITH REGISTRATION:
-In auth-register, after creating user:
-1. Generate verification token
-2. Store in profiles.verification_token
-3. Send verification email with link: https://yourapp.com/verify-email?token=TOKEN
+FLOW:
+1. User signs up → Supabase sends confirmation email
+2. User clicks link → lands here with token_hash & type
+3. We call verifyOtp() → confirms email in auth.users (email_confirmed_at set)
+4. We update your custom profiles.is_verified = true
+5. We redirect to /profile-setup (user is now logged in with session)
 
-DEBUGGING TIPS:
-1. Check Supabase Dashboard → Edge Functions → auth-verify-email → Logs
-2. Look for "User found" to confirm token lookup worked
-3. Check verification status in logs
-4. Verify profiles table has required columns
+REQUIRED SETUP:
+----------------
+1. In your signup code:
+   await supabase.auth.signUp({
+     email,
+     password,
+     options: {
+       emailRedirectTo: `${YOUR_APP_URL}/auth/verify-email`,
+     }
+   })
+
+2. Add redirect URLs in Supabase Dashboard → Authentication → URL Configuration:
+   https://intercenbooks.vercel.app/**
+   (or specifically /auth/verify-email and /profile-setup)
+
+3. Set environment variable:
+   supabase secrets set APP_URL=https://intercenbooks.vercel.app
+
+4. Deploy:
+   supabase functions deploy auth-verify-email
+
+ADVANTAGES:
+✅ Uses Supabase's secure, short-lived token_hash
+✅ No custom verification_token column needed
+✅ User automatically logged in after confirmation
+✅ Clean redirect to your ProfileSetup page
+✅ Full audit logging and custom profile updates
+
+You can remove any old custom verification_token logic from registration.
 */
