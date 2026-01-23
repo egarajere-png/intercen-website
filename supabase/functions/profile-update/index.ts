@@ -3,13 +3,11 @@
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Helper: Sanitize string input (very basic XSS prevention)
-function sanitize(input: string): string {
+function sanitize(input: string | undefined): string {
   if (!input) return ''
   return input.replace(/[<>'"]/g, '').trim()
 }
 
-// Helper: Validate base64 image
 function validateBase64Image(base64: string): { valid: boolean; error?: string } {
   if (!base64) return { valid: false, error: 'No image data provided' }
 
@@ -20,7 +18,7 @@ function validateBase64Image(base64: string): { valid: boolean; error?: string }
   const base64Data = base64.split(',')[1]
   const padding = base64Data.endsWith('==') ? 2 : base64Data.endsWith('=') ? 1 : 0
   const sizeInBytes = Math.floor((base64Data.length * 3) / 4) - padding
-  const maxSize = 5 * 1024 * 1024 // 5 MB – conservative limit
+  const maxSize = 5 * 1024 * 1024 // 5 MB
 
   if (sizeInBytes > maxSize) {
     return { valid: false, error: 'Image too large. Maximum size is 5MB.' }
@@ -30,10 +28,12 @@ function validateBase64Image(base64: string): { valid: boolean; error?: string }
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Get and validate token
   const authHeader = req.headers.get('authorization') || ''
   const token = authHeader.replace('Bearer ', '').trim()
 
@@ -44,8 +44,9 @@ Deno.serve(async (req) => {
     )
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
+  // Initialize Supabase client with user token
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
@@ -58,6 +59,7 @@ Deno.serve(async (req) => {
     global: { headers: { Authorization: `Bearer ${token}` } }
   })
 
+  // Verify user
   const { data: { user }, error: userError } = await supabase.auth.getUser()
 
   if (userError || !user) {
@@ -67,15 +69,10 @@ Deno.serve(async (req) => {
     )
   }
 
-  let full_name = ''
-  let bio = ''
-  let avatar_base64: string | null = null
-
+  // Parse request body
+  let body: any
   try {
-    const body = await req.json()
-    full_name = body.full_name ? sanitize(body.full_name) : ''
-    bio       = body.bio       ? sanitize(body.bio)       : ''
-    avatar_base64 = body.avatar_base64 ?? null
+    body = await req.json()
   } catch {
     return new Response(
       JSON.stringify({ error: 'Invalid JSON body.' }),
@@ -83,21 +80,38 @@ Deno.serve(async (req) => {
     )
   }
 
-  if (full_name.length > 100) {
-    return new Response(
-      JSON.stringify({ error: 'Full name must be 100 characters or less.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+  // Prepare fields to update (only include provided fields)
+  const updateFields: Record<string, any> = {}
+
+  if ('full_name' in body) {
+    updateFields.full_name = sanitize(body.full_name).slice(0, 255)
+  }
+  if ('bio' in body) {
+    updateFields.bio = sanitize(body.bio)
+  }
+  if ('phone' in body) {
+    updateFields.phone = sanitize(body.phone).slice(0, 20)
+  }
+  if ('address' in body) {
+    updateFields.address = sanitize(body.address)
+  }
+  if ('organization' in body) {
+    updateFields.organization = sanitize(body.organization).slice(0, 255)
+  }
+  if ('department' in body) {
+    updateFields.department = sanitize(body.department).slice(0, 255)
   }
 
-  if (bio.length > 500) {
-    return new Response(
-      JSON.stringify({ error: 'Bio must be 500 characters or less.' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+  // Account type – only allow valid values (optional: remove if it should be immutable)
+  if ('account_type' in body) {
+    const validTypes = ['personal', 'corporate', 'institutional']
+    if (validTypes.includes(body.account_type)) {
+      updateFields.account_type = body.account_type
+    }
   }
 
-  let avatar_url: string | null = null
+  // Avatar handling
+  const avatar_base64 = body.avatar_base64 ?? null
 
   if (avatar_base64) {
     const validation = validateBase64Image(avatar_base64)
@@ -112,7 +126,6 @@ Deno.serve(async (req) => {
     const extension = mimeMatch ? mimeMatch[1].toLowerCase() : 'png'
     const contentType = `image/${extension === 'jpg' ? 'jpeg' : extension}`
 
-    // Use user folder + native crypto.randomUUID() → no import needed
     const fileName = `${user.id}/${crypto.randomUUID()}.${extension}`
 
     const base64Data = avatar_base64.split(',')[1]
@@ -134,9 +147,9 @@ Deno.serve(async (req) => {
     }
 
     const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
-    avatar_url = urlData.publicUrl
+    updateFields.avatar_url = urlData.publicUrl
 
-    // Optional: clean up old avatar (non-blocking)
+    // Attempt to delete old avatar (non-blocking, best-effort)
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -148,29 +161,26 @@ Deno.serve(async (req) => {
         const oldUrl = new URL(profile.avatar_url)
         let oldPath = oldUrl.pathname
         if (oldPath.startsWith('/')) oldPath = oldPath.slice(1)
-        if (oldPath.startsWith('avatars/')) oldPath = oldPath.slice('avatars/'.length)
+        if (oldPath.startsWith('avatars/')) oldPath = oldPath.slice(8)
 
         if (oldPath && oldPath !== fileName) {
           supabase.storage.from('avatars').remove([oldPath]).catch(() => {})
         }
       }
     } catch {
-      // silent fail
+      // silent fail – cleanup is optional
     }
   }
 
-  const updateFields: Record<string, any> = {}
-  if (full_name) updateFields.full_name = full_name
-  if (bio)       updateFields.bio       = bio
-  if (avatar_url) updateFields.avatar_url = avatar_url
-
+  // Check if there's anything to update
   if (Object.keys(updateFields).length === 0) {
     return new Response(
-      JSON.stringify({ error: 'No fields to update.' }),
+      JSON.stringify({ error: 'No fields to update. Provide at least one field.' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
+  // Perform the update
   const { data: updatedProfile, error: updateError } = await supabase
     .from('profiles')
     .update(updateFields)
@@ -185,11 +195,12 @@ Deno.serve(async (req) => {
     )
   }
 
-  // Optional: update auth metadata (non-blocking)
-  if (full_name) {
-    supabase.auth.updateUser({ data: { full_name } }).catch(() => {})
+  // Optional: sync full_name to auth.user metadata (non-blocking)
+  if (updateFields.full_name) {
+    supabase.auth.updateUser({ data: { full_name: updateFields.full_name } }).catch(() => {})
   }
 
+  // Success response
   return new Response(
     JSON.stringify({
       message: 'Profile updated successfully',
