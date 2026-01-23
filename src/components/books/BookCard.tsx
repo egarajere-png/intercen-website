@@ -4,6 +4,9 @@ import { Book } from '@/types/book';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/contexts/CartContext';
+import { isAuthenticated } from '@/lib/auth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 interface BookCardProps {
   book: Book;
@@ -12,10 +15,16 @@ interface BookCardProps {
 
 export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
   const { addToCart } = useCart();
+  const navigate = useNavigate();
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!isAuthenticated()) {
+      toast.error('You must be logged in to add items to your cart.');
+      navigate('/auth');
+      return;
+    }
     addToCart(book);
   };
 

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
+import { isAuthenticated } from '@/lib/auth';
 import { Book, CartItem } from '@/types/book';
 import { toast } from 'sonner';
 
@@ -18,9 +19,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [items, setItems] = useState<CartItem[]>([]);
 
   const addToCart = useCallback((book: Book, quantity = 1) => {
+    if (!isAuthenticated()) {
+      toast.error('You must be logged in to add items to your cart.');
+      return;
+    }
     setItems(prevItems => {
       const existingItem = prevItems.find(item => item.book.id === book.id);
-      
       if (existingItem) {
         toast.success(`Updated "${book.title}" quantity in cart`);
         return prevItems.map(item =>
@@ -29,13 +33,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
             : item
         );
       }
-      
       toast.success(`Added "${book.title}" to cart`);
       return [...prevItems, { book, quantity }];
     });
   }, []);
 
   const removeFromCart = useCallback((bookId: string) => {
+    if (!isAuthenticated()) {
+      toast.error('You must be logged in to remove items from your cart.');
+      return;
+    }
     setItems(prevItems => {
       const item = prevItems.find(i => i.book.id === bookId);
       if (item) {
@@ -46,11 +53,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const updateQuantity = useCallback((bookId: string, quantity: number) => {
+    if (!isAuthenticated()) {
+      toast.error('You must be logged in to update your cart.');
+      return;
+    }
     if (quantity <= 0) {
       removeFromCart(bookId);
       return;
     }
-    
     setItems(prevItems =>
       prevItems.map(item =>
         item.book.id === bookId ? { ...item, quantity } : item
@@ -59,6 +69,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [removeFromCart]);
 
   const clearCart = useCallback(() => {
+    if (!isAuthenticated()) {
+      toast.error('You must be logged in to clear your cart.');
+      return;
+    }
     setItems([]);
     toast.info('Cart cleared');
   }, []);
