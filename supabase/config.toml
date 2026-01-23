@@ -1,14 +1,4 @@
 
-[functions.auth-register]
-enabled = true
-verify_jwt = false
-import_map = "./functions/auth-register/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/auth-register/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/auth-register/*.html" ]
 
 [functions.auth-login]
 enabled = true
@@ -32,17 +22,6 @@ entrypoint = "./functions/auth-reset-password/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/auth-reset-password/*.html" ]
 
-[functions.auth-verify-email]
-enabled = true
-verify_jwt = true
-import_map = "./functions/auth-verify-email/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/auth-verify-email/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/auth-verify-email/*.html" ]
-
 [functions.profile-update]
 enabled = true
 verify_jwt = true
@@ -53,3 +32,14 @@ entrypoint = "./functions/profile-update/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/profile-update/*.html" ]
+
+[functions.content-upload]
+enabled = true
+verify_jwt = true
+import_map = "./functions/content-upload/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/content-upload/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/content-upload/*.html" ]

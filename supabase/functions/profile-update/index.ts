@@ -71,10 +71,6 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get('authorization') || ''
     const token = authHeader.replace(/^Bearer\s+/i, '').trim()
 
-    console.log('[AUTH] Authorization header present:', !!authHeader)
-    console.log('[AUTH] Token length:', token.length)
-    console.log('[AUTH] Token prefix:', token.substring(0, 10) + (token.length > 10 ? '...' : ''))
-
     if (!token) {
       console.log('[AUTH] Missing token → 401')
       return new Response(JSON.stringify({ error: 'Unauthorized - No token provided' }), {
@@ -99,26 +95,17 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     })
 
-    console.log('[AUTH] Fetching user...')
     const { data: { user }, error: userError } = await supabase.auth.getUser(token)
 
-    if (userError) {
-      console.error('[AUTH ERROR]', userError.message, userError)
+    if (userError || !user) {
+      console.error('[AUTH ERROR]', userError?.message ?? 'No user')
       return new Response(
-        JSON.stringify({ error: 'Invalid or expired token', details: userError.message }),
+        JSON.stringify({ error: 'Invalid or expired token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    if (!user) {
-      console.error('[AUTH] No user returned')
-      return new Response(JSON.stringify({ error: 'No authenticated user found' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    console.log('[AUTH OK] User:', user.id, user.email || '(email hidden)')
+    console.log('[AUTH OK] User:', user.id)
 
     // ────────────────────────────────────────────────
     // Parse request body
@@ -136,7 +123,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const updateFields: Record<string, any> = {}
+    const updateFields: Record<string, any> = { id: user.id } // required for upsert
 
     if ('full_name' in body && body.full_name) {
       updateFields.full_name = sanitize(body.full_name).slice(0, 255)
@@ -163,25 +150,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log('[FIELDS] Preparing to update:', Object.keys(updateFields))
+    console.log('[FIELDS] Preparing upsert:', Object.keys(updateFields))
 
     // ────────────────────────────────────────────────
-    // Avatar handling with better diagnostics
+    // Avatar handling
     // ────────────────────────────────────────────────
 
     const avatar_base64 = body.avatar_base64 ?? null
     if (avatar_base64) {
       console.log('[AVATAR] Received, length:', avatar_base64.length)
 
-      // Show first part to diagnose junk data
       const preview = avatar_base64.substring(0, Math.min(80, avatar_base64.length))
       console.log('[AVATAR PREFIX]', preview + (avatar_base64.length > 80 ? '...' : ''))
 
       if (avatar_base64.length < 120) {
-        console.log('[AVATAR REJECT] Too short to be valid image')
-        return new Response(JSON.stringify({
-          error: 'Avatar data is too short to be a valid image'
-        }), {
+        return new Response(JSON.stringify({ error: 'Avatar data is too short to be a valid image' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         })
@@ -198,7 +181,6 @@ Deno.serve(async (req) => {
 
       const mimeMatch = avatar_base64.match(/^data:image\/(\w+);base64,/)
       if (!mimeMatch) {
-        console.log('[AVATAR] Mime regex failed after validation pass')
         return new Response(JSON.stringify({ error: 'Invalid image data URI' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -210,17 +192,8 @@ Deno.serve(async (req) => {
       const contentType = `image/${ext}`
 
       const base64Data = avatar_base64.split(',')[1]
-      if (!base64Data || base64Data.length < 50) {
-        console.log('[AVATAR] Empty or tiny base64 payload after split')
-        return new Response(JSON.stringify({ error: 'Invalid or empty image content' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-
       const fileData = safeBase64Decode(base64Data)
       if (!fileData) {
-        console.log('[AVATAR] Base64 decode failed')
         return new Response(JSON.stringify({ error: 'Corrupted base64 image data' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -230,8 +203,6 @@ Deno.serve(async (req) => {
       console.log('[AVATAR] Decoded successfully, bytes:', fileData.length)
 
       const fileName = `${user.id.slice(0, 8)}/${crypto.randomUUID()}.${ext}`
-
-      console.log('[STORAGE] Uploading:', fileName, contentType, `${(fileData.length / 1024).toFixed(1)} KB`)
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -259,7 +230,7 @@ Deno.serve(async (req) => {
           .from('profiles')
           .select('avatar_url')
           .eq('id', user.id)
-          .single()
+          .maybeSingle()
 
         if (profile?.avatar_url) {
           const oldPath = new URL(profile.avatar_url).pathname
@@ -276,46 +247,67 @@ Deno.serve(async (req) => {
           }
         }
       } catch (cleanupErr) {
-        console.warn('[CLEANUP] Error (non-fatal):', cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr))
+        console.warn('[CLEANUP] Error (non-fatal):', cleanupErr)
       }
     }
 
-    if (Object.keys(updateFields).length === 0) {
-      console.log('[UPDATE] No fields changed')
+    if (Object.keys(updateFields).length <= 1) { // only id → no real changes
+      console.log('[UPDATE] No meaningful fields changed')
       return new Response(JSON.stringify({ error: 'No fields to update' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    console.log('[DB] Updating profile...')
-    const { data: updatedProfile, error: updateError } = await supabase
-      .from('profiles')
-      .update(updateFields)
-      .eq('id', user.id)
-      .select()
-      .single()
+    // ────────────────────────────────────────────────
+    // UPSERT the profile row
+    // ────────────────────────────────────────────────
 
-    if (updateError) {
-      console.error('[DB ERROR]', updateError.message)
-      return new Response(JSON.stringify({ error: 'Failed to update profile' }), {
+    console.log('[DB] Performing upsert...')
+    const { data: updatedProfile, error: upsertError } = await supabase
+      .from('profiles')
+      .upsert(updateFields, {
+        onConflict: 'id',
+        ignoreDuplicates: false, // we want to update even if row exists
+      })
+      .select()
+      .maybeSingle()
+
+    if (upsertError) {
+      console.error('[DB UPSERT ERROR]', upsertError.message, upsertError.code, upsertError.details)
+      return new Response(JSON.stringify({
+        error: 'Failed to save profile',
+        details: upsertError.message,
+      }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    console.log('[DB] Profile updated successfully')
+    if (!updatedProfile) {
+      console.error('[DB] Upsert returned no data (unexpected)')
+      return new Response(JSON.stringify({ error: 'Profile save succeeded but no data returned' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
-    // Optional non-blocking auth metadata sync
+    console.log('[DB] Profile upserted successfully')
+
+    // Optional: sync full_name to auth metadata
     if (updateFields.full_name) {
       supabase.auth.updateUser({ data: { full_name: updateFields.full_name } })
         .catch(e => console.warn('[AUTH SYNC] Failed:', e.message))
     }
 
     return new Response(
-      JSON.stringify({ message: 'Profile updated successfully', profile: updatedProfile }),
+      JSON.stringify({ 
+        message: 'Profile saved successfully', 
+        profile: updatedProfile 
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+
   } catch (err) {
     console.error('[CRASH]', {
       message: err instanceof Error ? err.message : String(err),

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/SupabaseClient';  // Adjust path if needed
+import { supabase } from '@/lib/SupabaseClient';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024;  // 10MB
@@ -94,6 +94,7 @@ export default function ContentUploadPage() {
     setProgress(0);
 
     try {
+      // Get the current session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast.error('You must be logged in to upload content');
@@ -101,6 +102,9 @@ export default function ContentUploadPage() {
         return;
       }
 
+      console.log('Session found, access token:', session.access_token.substring(0, 20) + '...');
+
+      // Build FormData
       const formData = new FormData();
       formData.append('title', form.title.trim());
       formData.append('author', form.author.trim());
@@ -115,21 +119,28 @@ export default function ContentUploadPage() {
       if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
 
-      // Use Supabase Functions invoke (recommended way)
-      const { data, error } = await supabase.functions.invoke('content-upload', {
-        body: formData,
+      // Get Supabase URL from the client
+      const supabaseUrl = supabase.supabaseUrl;
+
+      // Use fetch with explicit Authorization header (supabase.functions.invoke doesn't work well with FormData)
+      const response = await fetch(`${supabaseUrl}/functions/v1/content-upload`, {
+        method: 'POST',
         headers: {
-          // Authorization is automatically added by supabase-js
+          'Authorization': `Bearer ${session.access_token}`,
+          // Note: Do NOT set Content-Type for FormData - browser will set it with boundary
         },
+        body: formData,
       });
 
-      if (error) {
-        console.error('Upload error:', error);
-        throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Upload error:', result);
+        throw new Error(result.error || 'Upload failed');
       }
 
       toast.success('Content uploaded successfully!');
-      console.log('Upload success:', data);
+      console.log('Upload success:', result);
 
       // Reset form
       setForm({

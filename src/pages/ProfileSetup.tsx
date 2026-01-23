@@ -420,7 +420,7 @@ export default function ProfileSetup() {
       <Dialog open={showWelcome} onOpenChange={setShowWelcome}>
         <DialogContent className="sm:max-w-md text-center">
           <DialogHeader>
-            <DialogTitle className="text-2xl">Welcome aboard, {fullName.trim() || 'friend'}! 🎉</DialogTitle>
+            <DialogTitle className="text-2xl">Welcome aboard, {fullName.trim() || 'friend'}!</DialogTitle>
             <DialogDescription className="pt-4 text-base">
               Your profile is now complete.<br />
               You're fully set up and ready to explore Intercen Books.
