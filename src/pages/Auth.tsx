@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabaseClient'; // Adjust path to your public client
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -72,73 +73,52 @@ const Auth = () => {
   };
 
   const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  e.preventDefault();
+  setIsLoading(true);
 
-    const form = e.target as HTMLFormElement;
-    const full_name = (form.elements.namedItem('name') as HTMLInputElement)?.value;
-    const email = (form.elements.namedItem('signup-email') as HTMLInputElement)?.value;
-    const password = (form.elements.namedItem('signup-password') as HTMLInputElement)?.value;
+  const form = e.target as HTMLFormElement;
+  const full_name = (form.elements.namedItem('name') as HTMLInputElement)?.value;
+  const email = (form.elements.namedItem('signup-email') as HTMLInputElement)?.value;
+  const password = (form.elements.namedItem('signup-password') as HTMLInputElement)?.value;
 
-    console.log('Sign up attempt:', { full_name, email, password: '***' });
+  console.log('Sign up attempt:', { full_name, email, password: '***' });
 
-    if (!full_name || !email || !password) {
-      toast.error('Please fill in all fields');
-      setIsLoading(false);
-      return;
-    }
+  if (!full_name || !email || !password) {
+    toast.error('Please fill in all fields');
+    setIsLoading(false);
+    return;
+  }
 
-    if (password.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      setIsLoading(false);
-      return;
-    }
+  if (password.length < 8) {
+    toast.error('Password must be at least 8 characters');
+    setIsLoading(false);
+    return;
+  }
 
-    try {
-      const endpoint = getEndpointUrl('auth-register');
-      console.log('Calling:', endpoint);
+  try {
+    // Direct client-side signup – this respects emailRedirectTo perfectly
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/profile-setup`,
+        data: { full_name }, // Stores full_name in user_metadata
+      },
+    });
 
-      // CRITICAL: Redirect confirmation link directly to /profile-setup
-      const emailRedirectTo = `${window.location.origin}/profile-setup`;
-      const payload = { email, password, full_name, emailRedirectTo };
-      console.log('Payload:', { ...payload, password: '***' });
+    if (error) throw error;
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    console.log('Signup response:', data);
 
-      let data;
-      try {
-        data = await res.json();
-      } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
-        throw new Error('Server returned an invalid response');
-      }
-
-      console.log('Registration response:', { status: res.status, data });
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
-      }
-
-      toast.success('Account created! Please check your email to verify your account.');
-      form.reset();
-      
-      // Auto-login if session is returned (unlikely for email confirmation flow)
-      if (data.session) {
-        localStorage.setItem('session', JSON.stringify(data.session));
-        localStorage.setItem('user', JSON.stringify(data.user));
-        navigate('/');
-      }
-    } catch (err: any) {
-      console.error('Registration error:', err);
-      toast.error(err.message || 'Registration failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    toast.success('Account created! Please check your email to verify your account.');
+    form.reset();
+  } catch (err: any) {
+    console.error('Registration error:', err);
+    toast.error(err.message || 'Registration failed');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
