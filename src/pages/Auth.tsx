@@ -98,8 +98,8 @@ const Auth = () => {
       const endpoint = getEndpointUrl('auth-register');
       console.log('Calling:', endpoint);
 
-      // Add emailRedirectTo for verification link
-      const emailRedirectTo = `${window.location.origin}/auth/verify-email`;
+      // CRITICAL: Redirect confirmation link directly to /profile-setup
+      const emailRedirectTo = `${window.location.origin}/profile-setup`;
       const payload = { email, password, full_name, emailRedirectTo };
       console.log('Payload:', { ...payload, password: '***' });
 
@@ -126,7 +126,7 @@ const Auth = () => {
       toast.success('Account created! Please check your email to verify your account.');
       form.reset();
       
-      // Auto-login if session is returned
+      // Auto-login if session is returned (unlikely for email confirmation flow)
       if (data.session) {
         localStorage.setItem('session', JSON.stringify(data.session));
         localStorage.setItem('user', JSON.stringify(data.user));
@@ -163,7 +163,6 @@ const Auth = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
-          // DO NOT send Authorization header for public reset password endpoint
         },
         body: JSON.stringify({ email }),
       });
