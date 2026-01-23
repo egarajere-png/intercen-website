@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabaseClient'; // Adjust path to your public client
+import { supabase } from '@/lib/SupabaseClient'; // Adjust path to your public client
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
