@@ -45,6 +45,7 @@ export default function ProfileSetup() {
   const [accountType, setAccountType] = useState<'personal' | 'corporate' | 'institutional'>('personal');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarBase64, setAvatarBase64] = useState<string | null>(null); // ← new state
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -65,14 +66,14 @@ export default function ProfileSetup() {
           title: 'Authentication issue',
           description: 'Could not load your email. Please sign in again.',
         });
-        navigate('/signin'); // or wherever your login is
+        navigate('/signin');
       }
     };
 
     loadUserEmail();
   }, [toast, navigate]);
 
-  // Cleanup object URL to prevent memory leaks
+  // Cleanup object URL
   useEffect(() => {
     return () => {
       if (avatarPreview) {
@@ -81,7 +82,16 @@ export default function ProfileSetup() {
     };
   }, [avatarPreview]);
 
-  const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -91,16 +101,33 @@ export default function ProfileSetup() {
         title: 'Invalid file',
         description: 'Please select an image (PNG, JPEG, WebP, GIF) ≤ 5MB',
       });
+      if (fileRef.current) fileRef.current.value = '';
       return;
     }
 
-    setAvatarFile(file);
-    const objectUrl = URL.createObjectURL(file);
-    setAvatarPreview(objectUrl);
+    try {
+      setLoading(true); // optional: show spinner during conversion
+      const base64 = await convertFileToBase64(file);
+      setAvatarBase64(base64);
+      setAvatarFile(file);
+
+      const objectUrl = URL.createObjectURL(file);
+      setAvatarPreview(objectUrl);
+    } catch (err) {
+      console.error('Base64 conversion failed', err);
+      toast({
+        variant: 'destructive',
+        title: 'Failed to process image',
+        description: 'Could not read the image file. Please try another one.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const clearAvatar = () => {
     setAvatarFile(null);
+    setAvatarBase64(null);
     setAvatarPreview(null);
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -112,7 +139,7 @@ export default function ProfileSetup() {
     address.trim() !== '' ||
     organization.trim() !== '' ||
     department.trim() !== '' ||
-    avatarFile !== null;
+    avatarBase64 !== null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,11 +170,10 @@ export default function ProfileSetup() {
         account_type: accountType,
       };
 
-      if (avatarPreview) {
-        payload.avatar_base64 = avatarPreview;
+      if (avatarBase64) {
+        payload.avatar_base64 = avatarBase64; // ← now correct data: URI
       }
 
-      // Call Supabase Edge Function correctly
       const { data, error } = await supabase.functions.invoke('profile-update', {
         body: payload,
         headers: {
@@ -157,13 +183,11 @@ export default function ProfileSetup() {
 
       if (error) throw error;
 
-      // Success
       toast({
         title: 'Profile saved',
         description: 'Your profile has been successfully updated.',
       });
 
-      // Show welcome dialog
       setShowWelcome(true);
     } catch (err: any) {
       console.error('Profile update error:', err);
@@ -181,7 +205,7 @@ export default function ProfileSetup() {
 
   const handleContinue = () => {
     setShowWelcome(false);
-    navigate('/'); // or '/dashboard', '/home', '/explore' — wherever you want
+    navigate('/');
   };
 
   return (
