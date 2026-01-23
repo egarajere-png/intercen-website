@@ -14,6 +14,7 @@ import PublishWithUs from "./pages/PublishWithUs";
 import ProductsServices from "./pages/ProductsServices";
 import Auth from "./pages/Auth";
 import ProfileSetup from "./pages/ProfileSetup"; // ← NEW: Import your ProfileSetup page
+import ContentUpload from "./pages/ContentUpload";
 import NotFound from "./pages/NotFound";
 
 import React, { Suspense, useEffect } from "react";
@@ -63,6 +64,7 @@ const App = () => {
               <Route path="/publish" element={<PublishWithUs />} />
               <Route path="/services" element={<ProductsServices />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/upload" element={<ContentUpload />} />
               
               {/* NEW: Profile setup route after email confirmation */}
               <Route path="/profile-setup" element={<ProfileSetup />} />
