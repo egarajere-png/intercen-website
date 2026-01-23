@@ -8,7 +8,21 @@ import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL!,
@@ -31,8 +45,10 @@ export default function ProfileSetup() {
   const [accountType, setAccountType] = useState<'personal' | 'corporate' | 'institutional'>('personal');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [email, setEmail] = useState('');           // ← will be auto-filled
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
+
   const { toast } = useToast();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,32 +60,43 @@ export default function ProfileSetup() {
       if (session?.user?.email) {
         setEmail(session.user.email);
       } else {
-        // Fallback / edge case — user not properly signed in
         toast({
           variant: 'destructive',
           title: 'Authentication issue',
           description: 'Could not load your email. Please sign in again.',
         });
+        navigate('/signin'); // or wherever your login is
       }
     };
 
     loadUserEmail();
-  }, [toast]);
+  }, [toast, navigate]);
+
+  // Cleanup object URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (avatarPreview) {
+        URL.revokeObjectURL(avatarPreview);
+      }
+    };
+  }, [avatarPreview]);
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/') || file.size > MAX_AVATAR) {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/') || file.size > MAX_AVATAR) {
       toast({
         variant: 'destructive',
         title: 'Invalid file',
-        description: 'Please select an image ≤ 5MB (PNG, JPEG, WebP, GIF)',
+        description: 'Please select an image (PNG, JPEG, WebP, GIF) ≤ 5MB',
       });
       return;
     }
+
     setAvatarFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setAvatarPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    setAvatarPreview(objectUrl);
   };
 
   const clearAvatar = () => {
@@ -79,19 +106,22 @@ export default function ProfileSetup() {
   };
 
   const hasChanges = () =>
-    fullName.trim() ||
-    bio.trim() ||
-    phone.trim() ||
-    address.trim() ||
-    organization.trim() ||
-    department.trim() ||
+    fullName.trim() !== '' ||
+    bio.trim() !== '' ||
+    phone.trim() !== '' ||
+    address.trim() !== '' ||
+    organization.trim() !== '' ||
+    department.trim() !== '' ||
     avatarFile !== null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!hasChanges()) {
-      toast({ title: 'No changes', description: 'Please update at least one field.' });
+      toast({
+        title: 'No changes detected',
+        description: 'Please update at least one field before saving.',
+      });
       return;
     }
 
@@ -99,9 +129,11 @@ export default function ProfileSetup() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      if (!session?.access_token) {
+        throw new Error('Not authenticated. Please sign in again.');
+      }
 
-      const payload: any = {
+      const payload: Record<string, any> = {
         full_name: fullName.trim() || undefined,
         bio: bio.trim() || undefined,
         phone: phone.trim() || undefined,
@@ -115,25 +147,30 @@ export default function ProfileSetup() {
         payload.avatar_base64 = avatarPreview;
       }
 
-      const res = await fetch('/profile-update', {
-        method: 'POST',
+      // Call Supabase Edge Function correctly
+      const { data, error } = await supabase.functions.invoke('profile-update', {
+        body: payload,
         headers: {
-          'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save profile');
+      if (error) throw error;
 
-      toast({ title: 'Success', description: 'Your profile has been saved.' });
-      navigate('/');
+      // Success
+      toast({
+        title: 'Profile saved',
+        description: 'Your profile has been successfully updated.',
+      });
+
+      // Show welcome dialog
+      setShowWelcome(true);
     } catch (err: any) {
+      console.error('Profile update error:', err);
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: err.message || 'Something went wrong. Please try again.',
+        title: 'Failed to save profile',
+        description: err.message || 'An unexpected error occurred. Please try again.',
       });
     } finally {
       setLoading(false);
@@ -141,6 +178,11 @@ export default function ProfileSetup() {
   };
 
   const isOrgVisible = accountType === 'corporate' || accountType === 'institutional';
+
+  const handleContinue = () => {
+    setShowWelcome(false);
+    navigate('/'); // or '/dashboard', '/home', '/explore' — wherever you want
+  };
 
   return (
     <Layout>
@@ -151,8 +193,7 @@ export default function ProfileSetup() {
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-
-            {/* Email – readonly, auto-filled */}
+            {/* Email – readonly */}
             <div className="space-y-2">
               <Label htmlFor="email">Email Address</Label>
               <Input
@@ -162,15 +203,15 @@ export default function ProfileSetup() {
                 readOnly
                 disabled
                 className="bg-muted/50 cursor-not-allowed"
-                placeholder="your.email@example.com"
               />
               <p className="text-xs text-muted-foreground">
-                This is the email you registered with and cannot be changed here.
+                Registered email — cannot be changed here.
               </p>
             </div>
 
+            {/* Full Name */}
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
+              <Label htmlFor="fullName">Full Name *</Label>
               <Input
                 id="fullName"
                 value={fullName}
@@ -179,11 +220,16 @@ export default function ProfileSetup() {
                 placeholder="Mwangi Kamau"
                 disabled={loading}
               />
-              <p className="text-xs text-right text-muted-foreground">
+              <p
+                className={`text-xs text-right ${
+                  fullName.length > MAX_NAME - 15 ? 'text-red-500 font-medium' : 'text-muted-foreground'
+                }`}
+              >
                 {fullName.length} / {MAX_NAME}
               </p>
             </div>
 
+            {/* Account Type */}
             <div className="space-y-2">
               <Label htmlFor="accountType">Account Type</Label>
               <Select
@@ -204,6 +250,7 @@ export default function ProfileSetup() {
               </Select>
             </div>
 
+            {/* Conditional Organization fields */}
             {isOrgVisible && (
               <>
                 <div className="space-y-2">
@@ -230,6 +277,7 @@ export default function ProfileSetup() {
               </>
             )}
 
+            {/* Phone */}
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
               <Input
@@ -242,6 +290,7 @@ export default function ProfileSetup() {
               />
             </div>
 
+            {/* Address */}
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
               <Textarea
@@ -254,6 +303,7 @@ export default function ProfileSetup() {
               />
             </div>
 
+            {/* Bio */}
             <div className="space-y-2">
               <Label htmlFor="bio">Bio / About You</Label>
               <Textarea
@@ -265,11 +315,16 @@ export default function ProfileSetup() {
                 rows={4}
                 disabled={loading}
               />
-              <p className="text-xs text-right text-muted-foreground">
+              <p
+                className={`text-xs text-right ${
+                  bio.length > MAX_BIO - 50 ? 'text-red-500 font-medium' : 'text-muted-foreground'
+                }`}
+              >
                 {bio.length} / {MAX_BIO}
               </p>
             </div>
 
+            {/* Avatar */}
             <div className="space-y-3">
               <Label>Profile Picture</Label>
               <Input
@@ -299,6 +354,7 @@ export default function ProfileSetup() {
               )}
             </div>
 
+            {/* Submit */}
             <Button
               type="submit"
               className="w-full"
@@ -309,6 +365,31 @@ export default function ProfileSetup() {
           </form>
         </Card>
       </div>
+
+      {/* Welcome Dialog */}
+      <Dialog open={showWelcome} onOpenChange={setShowWelcome}>
+        <DialogContent className="sm:max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Welcome aboard, {fullName.trim() || 'friend'}! 🎉</DialogTitle>
+            <DialogDescription className="pt-4 text-base">
+              Your profile is now complete.<br />
+              You're fully set up and ready to explore Intercen Books.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6">
+            <p className="text-muted-foreground">
+              Thank you for joining us in Nairobi!
+            </p>
+          </div>
+
+          <DialogFooter className="sm:justify-center">
+            <Button onClick={handleContinue} size="lg">
+              Continue to Home
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

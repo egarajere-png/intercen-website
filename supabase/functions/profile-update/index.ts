@@ -1,11 +1,13 @@
 // supabase/functions/profile-update/index.ts
-
 import { corsHeaders } from '../_shared/cors.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 function sanitize(input: string | undefined): string {
   if (!input) return ''
-  return input.replace(/[<>'"]/g, '').trim()
+  // Allow letters, numbers, spaces, common punctuation - prevents most XSS vectors
+  return input
+    .replace(/[^\p{L}\p{N}\s\-',.()@&]/gu, '') // keep unicode letters/numbers + safe chars
+    .trim()
 }
 
 function validateBase64Image(base64: string): { valid: boolean; error?: string } {
@@ -27,10 +29,30 @@ function validateBase64Image(base64: string): { valid: boolean; error?: string }
   return { valid: true }
 }
 
+function safeBase64Decode(base64: string): Uint8Array | null {
+  try {
+    const binary = atob(base64)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    return bytes
+  } catch {
+    return null
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   }
 
   // Get and validate token
@@ -50,13 +72,13 @@ Deno.serve(async (req) => {
 
   if (!supabaseUrl || !supabaseAnonKey) {
     return new Response(
-      JSON.stringify({ error: 'Server configuration error.' }),
+      JSON.stringify({ error: 'Server configuration error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } }
+    global: { headers: { Authorization: `Bearer ${token}` } },
   })
 
   // Verify user
@@ -64,7 +86,7 @@ Deno.serve(async (req) => {
 
   if (userError || !user) {
     return new Response(
-      JSON.stringify({ error: 'Invalid or expired token.' }),
+      JSON.stringify({ error: 'Invalid or expired token' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -75,34 +97,34 @@ Deno.serve(async (req) => {
     body = await req.json()
   } catch {
     return new Response(
-      JSON.stringify({ error: 'Invalid JSON body.' }),
+      JSON.stringify({ error: 'Invalid JSON body' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
-  // Prepare fields to update (only include provided fields)
+  // Prepare fields to update (only include provided & valid fields)
   const updateFields: Record<string, any> = {}
 
-  if ('full_name' in body) {
+  if ('full_name' in body && body.full_name) {
     updateFields.full_name = sanitize(body.full_name).slice(0, 255)
   }
-  if ('bio' in body) {
-    updateFields.bio = sanitize(body.bio)
+  if ('bio' in body && body.bio !== undefined) {
+    updateFields.bio = sanitize(body.bio).slice(0, 1000)
   }
-  if ('phone' in body) {
+  if ('phone' in body && body.phone !== undefined) {
     updateFields.phone = sanitize(body.phone).slice(0, 20)
   }
-  if ('address' in body) {
-    updateFields.address = sanitize(body.address)
+  if ('address' in body && body.address !== undefined) {
+    updateFields.address = sanitize(body.address).slice(0, 500)
   }
-  if ('organization' in body) {
+  if ('organization' in body && body.organization !== undefined) {
     updateFields.organization = sanitize(body.organization).slice(0, 255)
   }
-  if ('department' in body) {
+  if ('department' in body && body.department !== undefined) {
     updateFields.department = sanitize(body.department).slice(0, 255)
   }
 
-  // Account type – only allow valid values (optional: remove if it should be immutable)
+  // Account type – restricted values
   if ('account_type' in body) {
     const validTypes = ['personal', 'corporate', 'institutional']
     if (validTypes.includes(body.account_type)) {
@@ -112,7 +134,6 @@ Deno.serve(async (req) => {
 
   // Avatar handling
   const avatar_base64 = body.avatar_base64 ?? null
-
   if (avatar_base64) {
     const validation = validateBase64Image(avatar_base64)
     if (!validation.valid) {
@@ -126,22 +147,30 @@ Deno.serve(async (req) => {
     const extension = mimeMatch ? mimeMatch[1].toLowerCase() : 'png'
     const contentType = `image/${extension === 'jpg' ? 'jpeg' : extension}`
 
-    const fileName = `${user.id}/${crypto.randomUUID()}.${extension}`
-
     const base64Data = avatar_base64.split(',')[1]
-    const fileData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+    const fileData = safeBase64Decode(base64Data)
+
+    if (!fileData) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or corrupted base64 image data' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    const fileName = `${user.id}/${crypto.randomUUID()}.${extension}`
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
       .upload(fileName, fileData, {
         contentType,
         upsert: true,
-        cacheControl: '3600'
+        cacheControl: '3600',
       })
 
     if (uploadError) {
+      console.error('Avatar upload failed:', uploadError)
       return new Response(
-        JSON.stringify({ error: 'Failed to upload avatar', details: uploadError.message }),
+        JSON.stringify({ error: 'Failed to upload avatar' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
@@ -149,7 +178,7 @@ Deno.serve(async (req) => {
     const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName)
     updateFields.avatar_url = urlData.publicUrl
 
-    // Attempt to delete old avatar (non-blocking, best-effort)
+    // Best-effort cleanup of old avatar
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -164,18 +193,22 @@ Deno.serve(async (req) => {
         if (oldPath.startsWith('avatars/')) oldPath = oldPath.slice(8)
 
         if (oldPath && oldPath !== fileName) {
-          supabase.storage.from('avatars').remove([oldPath]).catch(() => {})
+          const { error: deleteError } = await supabase.storage.from('avatars').remove([oldPath])
+          if (deleteError) {
+            console.error('Old avatar cleanup failed:', deleteError)
+          }
         }
       }
-    } catch {
-      // silent fail – cleanup is optional
+    } catch (cleanupErr) {
+      console.error('Avatar cleanup attempt failed:', cleanupErr)
+      // silent fail – not critical
     }
   }
 
-  // Check if there's anything to update
+  // Nothing to update?
   if (Object.keys(updateFields).length === 0) {
     return new Response(
-      JSON.stringify({ error: 'No fields to update. Provide at least one field.' }),
+      JSON.stringify({ error: 'No valid fields to update. Provide at least one field.' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
@@ -189,22 +222,25 @@ Deno.serve(async (req) => {
     .single()
 
   if (updateError) {
+    console.error('Profile update failed:', updateError)
     return new Response(
-      JSON.stringify({ error: 'Failed to update profile', details: updateError.message }),
+      JSON.stringify({ error: 'Failed to update profile' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 
-  // Optional: sync full_name to auth.user metadata (non-blocking)
+  // Optional: sync full_name to user metadata (only if changed)
   if (updateFields.full_name) {
-    supabase.auth.updateUser({ data: { full_name: updateFields.full_name } }).catch(() => {})
+    supabase.auth
+      .updateUser({ data: { full_name: updateFields.full_name } })
+      .catch((err) => console.error('Failed to sync full_name to auth metadata:', err))
   }
 
-  // Success response
+  // Success
   return new Response(
     JSON.stringify({
       message: 'Profile updated successfully',
-      profile: updatedProfile
+      profile: updatedProfile,
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
