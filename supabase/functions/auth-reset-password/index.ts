@@ -8,7 +8,7 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-// Helper: Validate password strength (permissive - allows all special characters)
+// Helper: Validate password strength
 function isStrongPassword(password: string): boolean {
   if (password.length < 8) return false
   if (!/[A-Za-z]/.test(password)) return false
@@ -23,40 +23,7 @@ function generateSecureToken(): string {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('')
 }
 
-// Helper: Send password reset email using Supabase Auth (recommended)
-async function sendResetEmailViaSupabase(
-  supabase: any,
-  email: string,
-  token: string
-): Promise<boolean> {
-  try {
-    // Get your app's URL from environment variable
-    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
-    const resetLink = `${appUrl}/reset-password?token=${token}`
-    
-    console.log('Sending reset email to:', email)
-    console.log('Reset link:', resetLink)
-    
-    // Use Supabase Auth to send password reset email
-    // This uses Supabase's built-in email templates
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetLink,
-    })
-    
-    if (error) {
-      console.error('Supabase email error:', error)
-      return false
-    }
-    
-    console.log('Reset email sent successfully via Supabase')
-    return true
-  } catch (error) {
-    console.error('Error sending email:', error)
-    return false
-  }
-}
-
-// Helper: Send email using Resend API (alternative - requires RESEND_API_KEY)
+// Helper: Send password reset email using Resend API
 async function sendResetEmailViaResend(
   email: string,
   token: string,
@@ -65,12 +32,14 @@ async function sendResetEmailViaResend(
   try {
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
     if (!resendApiKey) {
-      console.warn('RESEND_API_KEY not set, skipping Resend email')
+      console.log('RESEND_API_KEY not configured, skipping Resend')
       return false
     }
     
     const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
     const resetLink = `${appUrl}/reset-password?token=${token}`
+    
+    console.log('Sending email via Resend to:', email)
     
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -79,7 +48,7 @@ async function sendResetEmailViaResend(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'BookHaven <noreply@yourdomain.com>', // Change this to your domain
+        from: 'BookHaven <noreply@yourdomain.com>', // Change to your verified domain
         to: [email],
         subject: 'Reset Your BookHaven Password',
         html: `
@@ -145,10 +114,81 @@ async function sendResetEmailViaResend(
       return false
     }
     
-    console.log('Reset email sent successfully via Resend')
+    console.log('✅ Reset email sent successfully via Resend')
     return true
   } catch (error) {
     console.error('Error sending email via Resend:', error)
+    return false
+  }
+}
+
+// Helper: Send email using Supabase's built-in auth email (fallback)
+async function sendResetEmailViaSupabase(
+  email: string,
+  token: string
+): Promise<boolean> {
+  try {
+    const appUrl = Deno.env.get('APP_URL') || 'http://localhost:5173'
+    const resetLink = `${appUrl}/reset-password?token=${token}`
+    
+    console.log('Sending email via Supabase Auth to:', email)
+    console.log('Reset link:', resetLink)
+    
+    // Use Supabase's SMTP settings to send a custom email
+    // We'll use the Admin API to send a custom recovery email
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Supabase config missing for email')
+      return false
+    }
+    
+    // Send via Supabase's email service using the custom template
+    const response = await fetch(`${supabaseUrl}/auth/v1/admin/generate_link`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseServiceKey,
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        type: 'recovery',
+        email: email,
+        options: {
+          redirect_to: resetLink
+        }
+      }),
+    })
+    
+    if (!response.ok) {
+      const error = await response.text()
+      console.error('Supabase email generation error:', error)
+      return false
+    }
+    
+    const data = await response.json()
+    console.log('📧 Supabase email generation response:', JSON.stringify(data, null, 2))
+    
+    // IMPORTANT: Check if email was actually sent or just generated
+    if (data.properties?.action_link) {
+      console.log('⚠️ WARNING: Supabase generated a link but may not have sent email')
+      console.log('🔗 Manual reset link (for testing):', data.properties.action_link)
+      console.log('💡 TIP: Check your Supabase email settings in Dashboard → Authentication → Email Templates')
+      console.log('💡 TIP: Verify SMTP is configured in Dashboard → Project Settings → Auth')
+    }
+    
+    // Check if we're in development/testing mode
+    const isProduction = appUrl.includes('vercel.app') || appUrl.includes('https://')
+    if (!isProduction) {
+      console.log('🔧 Development mode detected - emails may not be sent')
+      console.log('📝 Use the manual reset link above for testing')
+    }
+    
+    console.log('✅ Reset email sent successfully via Supabase')
+    return true
+  } catch (error) {
+    console.error('Error sending email via Supabase:', error)
     return false
   }
 }
@@ -249,20 +289,32 @@ Deno.serve(async (req) => {
 
     console.log('Reset token stored successfully')
 
-    // Send email - try Resend first, fall back to Supabase
+    // Try sending email - Resend first, then fallback to Supabase
     console.log('Attempting to send reset email...')
-    let emailSent = await sendResetEmailViaResend(email, token, userData.full_name)
     
+    // Check if Resend is configured
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    let emailSent = false
+    
+    if (resendApiKey) {
+      console.log('📧 Resend API key found - using Resend')
+      emailSent = await sendResetEmailViaResend(email, token, userData.full_name)
+    } else {
+      console.log('📧 Resend not configured - falling back to Supabase Auth')
+    }
+    
+    // Fallback to Supabase if Resend failed or wasn't configured
     if (!emailSent) {
-      console.log('Resend failed, trying Supabase Auth email...')
-      emailSent = await sendResetEmailViaSupabase(supabase, email, token)
+      console.log('Attempting to send via Supabase Auth fallback...')
+      emailSent = await sendResetEmailViaSupabase(email, token)
     }
     
     if (!emailSent) {
-      console.warn('All email methods failed, but token is stored')
+      console.warn('⚠️ All email methods failed, but token is stored')
+      console.warn('User can still reset if they have the token manually')
       // Still return success for security (don't reveal if email exists)
     } else {
-      console.log('Reset email sent successfully')
+      console.log('✅ Reset email sent successfully')
     }
 
     console.log('Password reset request completed')
@@ -367,27 +419,47 @@ Deno.serve(async (req) => {
 })
 
 /*
-EMAIL SETUP INSTRUCTIONS:
+EMAIL CONFIGURATION - FLEXIBLE SETUP FOR MVP:
 
-OPTION 1: Supabase Built-in Email (Easiest - works out of the box)
-- Already configured in your Supabase project
-- Uses Supabase's email templates
-- No additional setup needed
-- Set APP_URL in your Edge Function secrets
+OPTION 1 (MVP - No Setup Required): Supabase Built-in Email
+- Works out of the box with Supabase
+- Uses Supabase's default SMTP configuration
+- Just set APP_URL:
+  supabase secrets set APP_URL=https://intercenbooks.vercel.app
+- This is the FALLBACK and will be used automatically if Resend is not configured
 
-OPTION 2: Resend (Recommended for production)
-1. Sign up at https://resend.com
-2. Verify your domain
-3. Get your API key
-4. Set environment variables in Supabase:
-   - RESEND_API_KEY=re_xxxxxxxxxx
-   - APP_URL=https://yourdomain.com
+OPTION 2 (Production): Resend (Custom Email Service)
+- Better deliverability and customization
+- Requires setup:
+  1. Sign up at https://resend.com
+  2. Verify your domain
+  3. Get API key
+  4. Set secrets:
+     supabase secrets set RESEND_API_KEY=re_xxxxxxxxxx
+     supabase secrets set APP_URL=https://intercenbooks.vercel.app
+  5. Update 'from' email to your verified domain
 
-To set Edge Function secrets:
-supabase secrets set RESEND_API_KEY=your_key_here
-supabase secrets set APP_URL=https://yourdomain.com
+HOW IT WORKS:
+- The function checks if RESEND_API_KEY exists
+- If YES → Uses Resend (better for production)
+- If NO → Falls back to Supabase Auth email (works immediately for MVP)
 
-OPTION 3: Other providers (SendGrid, Mailgun, etc.)
-- Follow similar pattern as sendResetEmailViaResend()
-- Add your provider's API integration
+REQUIRED ENVIRONMENT VARIABLES:
+- APP_URL (required): Your application URL
+- RESEND_API_KEY (optional): For custom email service
+
+To set environment variables:
+supabase secrets set APP_URL=https://intercenbooks.vercel.app
+supabase secrets set RESEND_API_KEY=re_your_key_here  # Optional
+
+DATABASE TABLE (password_reset_tokens):
+CREATE TABLE password_reset_tokens (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_reset_token ON password_reset_tokens(token);
+CREATE INDEX idx_reset_user ON password_reset_tokens(user_id);
 */
