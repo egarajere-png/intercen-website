@@ -25,7 +25,7 @@ entrypoint = "./functions/profile-update/index.ts"
 
 [functions.content-upload]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/content-upload/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -36,7 +36,7 @@ entrypoint = "./functions/content-upload/index.ts"
 
 [functions.profile-info-edit]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/profile-info-edit/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -47,7 +47,7 @@ entrypoint = "./functions/profile-info-edit/index.ts"
 
 [functions.content-update]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/content-update/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -58,7 +58,7 @@ entrypoint = "./functions/content-update/index.ts"
 
 [functions.content-publish]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/content-publish/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

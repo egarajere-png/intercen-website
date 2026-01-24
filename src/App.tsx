@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
 
 import Index from "./pages/Index";
@@ -18,13 +18,26 @@ import Profile from "./pages/Profile";
 import ContentUpload from "./pages/ContentUpload";
 import NotFound from "./pages/NotFound";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
+import ContentPublishButton from "./components/contents/ContentPublishButton";
 
 import React, { Suspense, useEffect } from "react";
-import { supabase } from "@/lib/SupabaseClient"; // ← Adjust this path if your client is elsewhere (e.g., "@/supabase/client")
+import { supabase } from "@/lib/SupabaseClient";
 
 const PasswordChange = React.lazy(() => import("./pages/PasswordChange"));
 
 const queryClient = new QueryClient();
+
+// Simple wrapper page for ContentPublishButton demo route
+function ContentPublishButtonPage() {
+  const { id } = useParams();
+  // For demo, status is draft
+  return (
+    <div className="container py-12 max-w-xl mx-auto">
+      <h1 className="text-2xl font-bold mb-6">Publish Content</h1>
+      <ContentPublishButton contentId={id || ''} currentStatus="draft" />
+    </div>
+  );
+}
 
 const App = () => {
   // Critical: Handle Supabase auth hash parameters on app load (email confirmation, password reset, etc.)
@@ -84,6 +97,8 @@ const App = () => {
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="/content/update/:id" element={<ContentUpdatePage />} />
+              <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
+              
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

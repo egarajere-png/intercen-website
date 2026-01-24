@@ -133,7 +133,7 @@ export const Header = () => {
               )}
             </Button>
           </Link>
-c
+
           {/* User Account */}
           {/* User Account Dropdown (Desktop) */}
           <span className="hidden md:flex">

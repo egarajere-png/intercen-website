@@ -1,5 +1,5 @@
 // supabase/functions/content-update/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '@supabase/supabase-js';
 import { multiParser } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
 
 const corsHeaders = {
