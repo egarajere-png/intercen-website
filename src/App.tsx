@@ -13,9 +13,11 @@ import About from "./pages/About";
 import PublishWithUs from "./pages/PublishWithUs";
 import ProductsServices from "./pages/ProductsServices";
 import Auth from "./pages/Auth";
-import ProfileSetup from "./pages/ProfileSetup"; // ← NEW: Import your ProfileSetup page
+import ProfileSetup from "./pages/ProfileSetup";
+import Profile from "./pages/Profile";
 import ContentUpload from "./pages/ContentUpload";
 import NotFound from "./pages/NotFound";
+import ContentUpdatePage from "./pages/ContentUpdatePage";
 
 import React, { Suspense, useEffect } from "react";
 import { supabase } from "@/lib/SupabaseClient"; // ← Adjust this path if your client is elsewhere (e.g., "@/supabase/client")
@@ -64,10 +66,12 @@ const App = () => {
               <Route path="/publish" element={<PublishWithUs />} />
               <Route path="/services" element={<ProductsServices />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/signin" element={<Auth />} />
               <Route path="/upload" element={<ContentUpload />} />
               
               {/* NEW: Profile setup route after email confirmation */}
               <Route path="/profile-setup" element={<ProfileSetup />} />
+              <Route path="/profile" element={<Profile />} />
 
               <Route
                 path="/reset-password"
@@ -79,6 +83,7 @@ const App = () => {
               />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="/content/update/:id" element={<ContentUpdatePage />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

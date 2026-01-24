@@ -1,15 +1,5 @@
 
 
-[functions.auth-login]
-enabled = true
-verify_jwt = false
-import_map = "./functions/auth-login/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/auth-login/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/auth-login/*.html" ]
 
 [functions.auth-reset-password]
 enabled = true
@@ -43,3 +33,36 @@ entrypoint = "./functions/content-upload/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/content-upload/*.html" ]
+
+[functions.profile-info-edit]
+enabled = true
+verify_jwt = true
+import_map = "./functions/profile-info-edit/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/profile-info-edit/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/profile-info-edit/*.html" ]
+
+[functions.content-update]
+enabled = true
+verify_jwt = true
+import_map = "./functions/content-update/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/content-update/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/content-update/*.html" ]
+
+[functions.content-publish]
+enabled = true
+verify_jwt = true
+import_map = "./functions/content-publish/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/content-publish/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/content-publish/*.html" ]

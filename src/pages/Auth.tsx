@@ -40,27 +40,9 @@ const Auth = () => {
     }
 
     try {
-      const endpoint = getEndpointUrl('auth-login');
-      console.log('Calling:', endpoint);
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-      console.log('Response:', { status: res.status, data });
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      // Store session data
-      if (data.session) {
-        localStorage.setItem('session', JSON.stringify(data.session));
-        localStorage.setItem('user', JSON.stringify(data.user));
-      }
+      // Use Supabase client for sign in
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
       toast.success('Welcome back!');
       navigate('/');

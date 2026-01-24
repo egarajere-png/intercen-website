@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/SupabaseClient';
 import { useToast } from '../hooks/use-toast';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/button';
@@ -24,10 +24,7 @@ import {
   DialogTitle,
 } from '../components/ui/dialog';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL!,
-  import.meta.env.VITE_SUPABASE_ANON_KEY!
-);
+
 
 const MAX_NAME = 100;
 const MAX_BIO = 500;

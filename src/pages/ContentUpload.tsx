@@ -19,6 +19,10 @@ const CONTENT_TYPES = [
   'report',
   'manual',
   'guide',
+  'manuscript',
+  'article',
+  'thesis',
+  'dissertation',
 ] as const;
 
 export default function ContentUploadPage() {

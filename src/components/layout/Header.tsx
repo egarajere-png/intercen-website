@@ -1,4 +1,41 @@
-import { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+// Simple dropdown for user menu
+import { supabase } from '@/lib/SupabaseClient';
+function UserDropdown({ loggedIn, setLoggedIn, isMobile, onNavigate }: { loggedIn: boolean, setLoggedIn: (v: boolean) => void, isMobile?: boolean, onNavigate?: () => void }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  // Close dropdown on click outside
+  React.useEffect(() => {
+    if (!open) return;
+    function handle(e) {
+      if (btnRef.current && !btnRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+  const menuClass = `absolute ${isMobile ? 'left-0' : 'right-0'} mt-2 w-44 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 z-50`;
+  return (
+    <div className={`relative ${isMobile ? 'w-full' : ''}`} ref={btnRef}>
+      <Button variant="ghost" size="icon" className={isMobile ? 'w-full flex justify-start' : ''} title={loggedIn ? 'Account' : 'Sign In'} onClick={() => setOpen(v => !v)}>
+        <User className="h-5 w-5" />
+      </Button>
+      {open && (
+        <div className={menuClass}>
+          {loggedIn ? (
+            <>
+              <a href="/profile" className="block px-4 py-2 text-sm hover:bg-muted" onClick={() => { setOpen(false); onNavigate && onNavigate(); }}>Profile</a>
+              <a href="/upload" className="block px-4 py-2 text-sm hover:bg-muted" onClick={() => { setOpen(false); onNavigate && onNavigate(); }}>Upload</a>
+              <button className="block w-full text-left px-4 py-2 text-sm hover:bg-muted" onClick={async () => { await supabase.auth.signOut(); setLoggedIn(false); setOpen(false); window.location.reload(); }}>Logout</button>
+            </>
+          ) : (
+            <a href="/auth" className="block px-4 py-2 text-sm hover:bg-muted" onClick={() => { setOpen(false); onNavigate && onNavigate(); }}>Sign In</a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+// Remove isAuthenticated import
 import { Link, useLocation } from 'react-router-dom';
 import { Search, ShoppingCart, User, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +59,22 @@ export const Header = () => {
   const location = useLocation();
   const { getItemCount } = useCart();
   const itemCount = getItemCount();
+
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  // Listen for Supabase auth state changes
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setLoggedIn(!!session);
+    });
+    // Check initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setLoggedIn(!!session);
+    });
+    return () => {
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -50,6 +103,9 @@ export const Header = () => {
               {link.label}
             </Link>
           ))}
+          {!loggedIn && (
+            <Link to="/auth" className={`text-sm font-medium transition-colors hover:text-primary ${location.pathname === '/auth' ? 'text-primary' : 'text-muted-foreground'}`}>Sign In</Link>
+          )}
         </nav>
 
         {/* Actions */}
@@ -77,13 +133,12 @@ export const Header = () => {
               )}
             </Button>
           </Link>
-
+c
           {/* User Account */}
-          <Link to="/auth">
-            <Button variant="ghost" size="icon" className="hidden md:flex">
-              <User className="h-5 w-5" />
-            </Button>
-          </Link>
+          {/* User Account Dropdown (Desktop) */}
+          <span className="hidden md:flex">
+            <UserDropdown loggedIn={loggedIn} setLoggedIn={setLoggedIn} />
+          </span>
 
           {/* Mobile Menu Toggle */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
@@ -109,14 +164,8 @@ export const Header = () => {
                   </Link>
                 ))}
                 <div className="h-px bg-border my-4" />
-                <Link
-                  to="/auth"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center gap-3 text-lg font-medium py-2 hover:text-primary"
-                >
-                  <User className="h-5 w-5" />
-                  Sign In
-                </Link>
+                {/* User Account Dropdown (Mobile) */}
+                <UserDropdown loggedIn={loggedIn} setLoggedIn={setLoggedIn} isMobile onNavigate={() => setIsMobileMenuOpen(false)} />
                 <Link
                   to="/cart"
                   onClick={() => setIsMobileMenuOpen(false)}
