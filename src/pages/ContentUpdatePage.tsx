@@ -29,7 +29,6 @@ const VISIBILITY_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'pending_review', label: 'Pending Review' },
-  { value: 'published', label: 'Published' },
   { value: 'archived', label: 'Archived' },
 ];
 
@@ -150,6 +149,9 @@ export default function ContentUpdatePage() {
       toast.error('Failed to load version history');
     }
   };
+  const handlePublishClick = () => {
+  navigate(`/content/publish/${id}`); // replace contentId with your actual id variable
+};
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, files } = e.target;
@@ -297,6 +299,14 @@ export default function ContentUpdatePage() {
             <History className="h-4 w-4 mr-2" />
             Version History
           </Button>
+
+          <Button
+  variant="outline"
+  onClick={handlePublishClick}
+>
+  <History className="h-4 w-4 mr-2" />
+  Publish Now
+</Button>
         </div>
 
         {/* Current File Info */}

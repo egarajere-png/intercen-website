@@ -1,5 +1,5 @@
 // supabase/functions/content-publish/index.ts
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -148,12 +148,7 @@ Deno.serve(async (req) => {
         })
       }
 
-      if (!content.description || content.description.trim().length < MIN_DESCRIPTION_LENGTH) {
-        validationErrors.push({
-          field: 'description',
-          message: `Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`
-        })
-      }
+      // Removed description length check
 
       if (content.is_for_sale && (!content.price || content.price <= 0)) {
         validationErrors.push({
