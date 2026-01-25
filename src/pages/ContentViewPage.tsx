@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Layout } from '@/components/layout/Layout';
 import { toast } from 'sonner';
+// import { VersionHistory } from '@/components/contents/VersionManagement';
 
 const ContentViewPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,7 @@ const ContentViewPage: React.FC = () => {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
             <Button variant="outline" onClick={() => navigate(`/content/update/${content.id}`)}>Edit</Button>
+            {/* Version History button/modal for viewing and downloading previous versions - removed */}
           </div>
         </div>
         <Card className="p-6 space-y-6">

@@ -109,13 +109,17 @@ const PublishWithUs = () => {
               the expertise, resources, and reach to bring your books to readers across Africa and beyond.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="hero" size="xl" className="gap-2">
-                <FileText className="h-5 w-5" />
-                Submit Your Manuscript
+              <Button asChild variant="hero" size="xl" className="gap-2">
+                <Link to="/upload#top">
+                  <FileText className="h-5 w-5" />
+                  Submit Your Manuscript
+                </Link>
               </Button>
-              <Button variant="hero-outline" size="xl" className="gap-2">
-                <Users className="h-5 w-5" />
-                Become a Vendor
+              <Button asChild variant="hero-outline" size="xl" className="gap-2">
+                <Link to="/upload#top">
+                  <Users className="h-5 w-5" />
+                  Become a Vendor
+                </Link>
               </Button>
             </div>
           </div>
@@ -168,9 +172,11 @@ const PublishWithUs = () => {
                       </li>
                     ))}
                   </ul>
-                  <Button variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    {option.cta}
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                  <Button asChild variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                    <Link to="/upload#top">
+                      {option.cta}
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>
@@ -290,9 +296,11 @@ const PublishWithUs = () => {
               Submit your manuscript today or reach out to discuss partnership opportunities.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button variant="gold" size="xl" className="gap-2">
-                <Send className="h-5 w-5" />
-                Submit Manuscript
+              <Button asChild variant="gold" size="xl" className="gap-2">
+                <Link to="/upload#top">
+                  <Send className="h-5 w-5" />
+                  Submit Manuscript
+                </Link>
               </Button>
               <Button variant="outline" size="xl" className="border-white/30 text-white hover:bg-white/10">
                 Contact Us
