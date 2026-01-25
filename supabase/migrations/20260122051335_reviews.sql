@@ -5,7 +5,7 @@ CREATE TABLE public.reviews (
     rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
     title VARCHAR(255),
     review_text TEXT,
-    is_verified_purchase BOOLEAN DEFAULT FALSE,
+    is_verified_purchase BOOLEAN DEFAULT FALSE,s
     helpful_count INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
