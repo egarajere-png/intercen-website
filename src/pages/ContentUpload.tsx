@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +28,8 @@ const CONTENT_TYPES = [
 export default function ContentUploadPage() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +46,56 @@ export default function ContentUploadPage() {
     file: null as File | null,
     cover: null as File | null,
   });
+
+  // Check authentication and scroll to top
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          toast.error('Please log in to access this page');
+          // Redirect to login page - adjust the path as needed
+          window.location.href = '/login';
+          return;
+        }
+        
+        setIsAuthenticated(true);
+      } catch (error) {
+        console.error('Auth check error:', error);
+        toast.error('Authentication error. Please log in.');
+        window.location.href = '/login';
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        toast.error('Session expired. Please log in again.');
+        window.location.href = '/login';
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Force scroll to top on mount and when authentication is confirmed
+  useEffect(() => {
+    if (isAuthenticated) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      
+      // Additional fallback to ensure scroll to top
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }, 100);
+    }
+  }, [isAuthenticated]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, files } = e.target;
@@ -90,8 +142,7 @@ export default function ContentUploadPage() {
     return true;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     setUploading(true);
@@ -103,6 +154,7 @@ export default function ContentUploadPage() {
       if (!session) {
         toast.error('You must be logged in to upload content');
         setUploading(false);
+        window.location.href = '/login';
         return;
       }
 
@@ -126,12 +178,11 @@ export default function ContentUploadPage() {
       // Get Supabase URL from the client
       const supabaseUrl = supabase.supabaseUrl;
 
-      // Use fetch with explicit Authorization header (supabase.functions.invoke doesn't work well with FormData)
+      // Use fetch with explicit Authorization header
       const response = await fetch(`${supabaseUrl}/functions/v1/content-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
-          // Note: Do NOT set Content-Type for FormData - browser will set it with boundary
         },
         body: formData,
       });
@@ -163,6 +214,9 @@ export default function ContentUploadPage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (coverInputRef.current) coverInputRef.current.value = '';
 
+      // Scroll back to top after successful upload
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
     } catch (err: any) {
       console.error('Upload failed:', err);
       toast.error(err.message || 'Upload failed. Please try again.');
@@ -172,14 +226,33 @@ export default function ContentUploadPage() {
     }
   };
 
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <Layout>
+        <div className="container max-w-3xl py-12 flex items-center justify-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Verifying authentication...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Only render the form if authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <Layout>
-      <div className="container max-w-3xl py-12">
+      <div id="top" className="container max-w-3xl py-12">
         <h1 className="font-forum text-3xl md:text-4xl mb-8 text-primary">
           Upload New Content
         </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Label htmlFor="title">Title <span className="text-red-500">*</span></Label>
@@ -322,7 +395,7 @@ export default function ContentUploadPage() {
 
           <div className="flex items-center gap-4 pt-6">
             <Button
-              type="submit"
+              onClick={handleSubmit}
               variant="hero"
               size="lg"
               disabled={uploading}
@@ -335,8 +408,11 @@ export default function ContentUploadPage() {
               </div>
             )}
           </div>
-        </form>
+        </div>
       </div>
     </Layout>
   );
-}
+} 
+
+
+

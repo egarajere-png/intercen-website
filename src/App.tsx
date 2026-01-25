@@ -85,6 +85,7 @@ const App = () => {
               <Route path="/services" element={<ProductsServices />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/signin" element={<Auth />} />
+              <Route path="/login" element={<Auth />} />
               <Route path="/upload" element={<ContentUpload />} />
               
               {/* NEW: Profile setup route after email confirmation */}

@@ -77,3 +77,25 @@ entrypoint = "./functions/content-delete/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/content-delete/*.html" ]
+
+[functions.content-add-version]
+enabled = true
+verify_jwt = true
+import_map = "./functions/content-add-version/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/content-add-version/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/content-add-version/*.html" ]
+
+[functions.content-rollback-version]
+enabled = true
+verify_jwt = true
+import_map = "./functions/content-rollback-version/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/content-rollback-version/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/content-rollback-version/*.html" ]
