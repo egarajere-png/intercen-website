@@ -76,10 +76,19 @@ export default function ContentUpdatePage() {
   });
 
   useEffect(() => {
+    // Always scroll to top when this page mounts or id changes
+    window.scrollTo({ top: 0, behavior: 'auto' });
     if (id) {
       loadContent();
     }
   }, [id]);
+
+  // Also scroll to top when loading changes from true to false (content loaded)
+  useEffect(() => {
+    if (!loading) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [loading]);
 
   const loadContent = async () => {
     try {
