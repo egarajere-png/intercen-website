@@ -28,6 +28,33 @@ const ROLES = [
 ];
 
 const ProfilePage: React.FC = () => {
+    // State for user's uploaded content
+    const [userContents, setUserContents] = useState<any[]>([]);
+    const [showContentList, setShowContentList] = useState(false);
+    const [loadingContent, setLoadingContent] = useState(false);
+    // Load user's uploaded content
+    const fetchUserContents = async () => {
+      if (!user?.id) return;
+      setLoadingContent(true);
+      try {
+        // Use correct field 'uploaded_by' as per schema
+        const { data, error } = await supabase
+          .from('content')
+          .select('*')
+          .eq('uploaded_by', user.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setUserContents(data || []);
+      } catch (err) {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to load content',
+          description: 'Could not fetch your uploaded content.',
+        });
+      } finally {
+        setLoadingContent(false);
+      }
+    };
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -274,6 +301,17 @@ const ProfilePage: React.FC = () => {
     <>
       <Header />
       <div className="container py-12 max-w-2xl mx-auto">
+        {/* Uploaded Content Button at the Top */}
+        <div className="mb-8 flex items-center justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate('/content-management')}
+            className="ml-auto"
+          >
+            View Uploaded Content
+          </Button>
+        </div>
         <h1 className="headline-1 mb-6">My Profile</h1>
         <Card className="p-6 flex flex-col gap-4">
           <form onSubmit={handleSubmit} className="space-y-6">

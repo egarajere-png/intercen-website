@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/SupabaseClient';
 import { Loader2, Upload, FileText, Image as ImageIcon, History } from 'lucide-react';
+import { ContentDeleteButton } from '@/components/contents/ContentDeleteButton';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024; // 10MB
@@ -75,10 +76,19 @@ export default function ContentUpdatePage() {
   });
 
   useEffect(() => {
+    // Always scroll to top when this page mounts or id changes
+    window.scrollTo({ top: 0, behavior: 'auto' });
     if (id) {
       loadContent();
     }
   }, [id]);
+
+  // Also scroll to top when loading changes from true to false (content loaded)
+  useEffect(() => {
+    if (!loading) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+  }, [loading]);
 
   const loadContent = async () => {
     try {
@@ -283,7 +293,7 @@ export default function ContentUpdatePage() {
   return (
     <Layout>
       <div className="container max-w-4xl py-12">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
             <h1 className="font-forum text-3xl md:text-4xl text-primary">
               Update Content
@@ -292,21 +302,29 @@ export default function ContentUpdatePage() {
               Modify metadata or replace files for your content
             </p>
           </div>
-          <Button
-            variant="outline"
-            onClick={loadVersionHistory}
-          >
-            <History className="h-4 w-4 mr-2" />
-            Version History
-          </Button>
-
-          <Button
-  variant="outline"
-  onClick={handlePublishClick}
->
-  <History className="h-4 w-4 mr-2" />
-  Publish Now
-</Button>
+          <div className="flex flex-col md:flex-row gap-2 md:gap-4 items-center">
+            <Button
+              variant="outline"
+              onClick={loadVersionHistory}
+            >
+              <History className="h-4 w-4 mr-2" />
+              Version History
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePublishClick}
+            >
+              <History className="h-4 w-4 mr-2" />
+              Publish Now
+            </Button>
+            {id && (
+              <ContentDeleteButton
+                contentId={id}
+                contentTitle={form.title || 'Untitled'}
+                redirectOnDelete="/"
+              />
+            )}
+          </div>
         </div>
 
         {/* Current File Info */}
