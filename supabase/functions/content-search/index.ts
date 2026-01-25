@@ -1,6 +1,7 @@
 // supabase/functions/content-search/index.ts
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,6 +53,10 @@ serve(async (req) => {
       }
     );
 
+    // Get authenticated user
+    const { data: { user } } = await supabaseClient.auth.getUser();
+    const userId = user?.id || null;
+
     // Parse request body
     const requestBody: SearchRequest = await req.json();
     
@@ -67,23 +72,60 @@ serve(async (req) => {
     const validatedPage = Math.max(1, page);
     const validatedPageSize = Math.min(Math.max(1, page_size), 100); // Max 100 items per page
 
-    // Start building the query
+    // Build the base query - ALWAYS filter for published content first
     let queryBuilder = supabaseClient
       .from("content")
-      .select("*", { count: "exact" });
+      .select("*", { count: "exact" })
+      .eq("status", "published"); // CRITICAL: Only published content
+
+    // Apply visibility filter
+    if (filters.visibility) {
+      // If visibility is explicitly requested
+      if (userId) {
+        // Allow user to see their own content with that visibility
+        queryBuilder = queryBuilder.or(
+          `and(visibility.eq.${filters.visibility},uploaded_by.eq.${userId}),and(visibility.eq.${filters.visibility},visibility.eq.public)`
+        );
+      } else {
+        queryBuilder = queryBuilder.eq("visibility", filters.visibility);
+      }
+    } else {
+      // Default visibility logic
+      if (userId) {
+        // Show: public content OR user's own private content
+        queryBuilder = queryBuilder.or(
+          `visibility.eq.public,uploaded_by.eq.${userId}`
+        );
+      } else {
+        // Not logged in: only public content
+        queryBuilder = queryBuilder.eq("visibility", "public");
+      }
+    }
 
     // Apply full-text search if query is provided
     if (query && query.trim() !== "") {
-      const searchQuery = query.trim();
+      const searchQuery = query.trim().replace(/\s+/g, ' ');
       
-      // Use full-text search with to_tsquery
-      // We'll use websearch_to_tsquery for better handling of user queries
-      queryBuilder = queryBuilder.or(
-        `search_vector.wfts.${searchQuery},title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,author.ilike.%${searchQuery}%`
-      );
+      // Build search conditions
+      const searchConditions: string[] = [];
+      
+      // Search in title (case-insensitive)
+      searchConditions.push(`title.ilike.%${searchQuery}%`);
+      
+      // Search in description
+      searchConditions.push(`description.ilike.%${searchQuery}%`);
+      
+      // Search in author
+      searchConditions.push(`author.ilike.%${searchQuery}%`);
+      
+      // Search in subtitle
+      searchConditions.push(`subtitle.ilike.%${searchQuery}%`);
+      
+      // Combine with OR
+      queryBuilder = queryBuilder.or(searchConditions.join(','));
     }
 
-    // Apply filters
+    // Apply other filters
     
     // Category filter
     if (filters.category_id) {
@@ -96,21 +138,21 @@ serve(async (req) => {
     }
 
     // Price range filter
-    if (filters.price_min !== undefined) {
+    if (filters.price_min !== undefined && filters.price_min > 0) {
       queryBuilder = queryBuilder.gte("price", filters.price_min);
     }
-    if (filters.price_max !== undefined) {
+    if (filters.price_max !== undefined && filters.price_max < 1000000) {
       queryBuilder = queryBuilder.lte("price", filters.price_max);
     }
 
     // Minimum rating filter
-    if (filters.min_rating !== undefined) {
+    if (filters.min_rating !== undefined && filters.min_rating > 0) {
       queryBuilder = queryBuilder.gte("average_rating", filters.min_rating);
     }
 
     // Free content filter
-    if (filters.is_free !== undefined) {
-      queryBuilder = queryBuilder.eq("is_free", filters.is_free);
+    if (filters.is_free === true) {
+      queryBuilder = queryBuilder.eq("is_free", true);
     }
 
     // Language filter
@@ -118,43 +160,27 @@ serve(async (req) => {
       queryBuilder = queryBuilder.eq("language", filters.language);
     }
 
-    // Get user ID for private content access
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    const userId = user?.id || null;
-
-    // Visibility filter - show public content + user's own private content
-    if (filters.visibility) {
-      // If visibility is explicitly requested, filter for it
-      queryBuilder = queryBuilder.eq("visibility", filters.visibility);
-    } else {
-      // Default: show public content OR content uploaded by the current user
-      if (userId) {
-        queryBuilder = queryBuilder.or(`visibility.eq.public,uploaded_by.eq.${userId}`);
-      } else {
-        queryBuilder = queryBuilder.eq("visibility", "public");
-      }
-    }
-
-    // Always filter for published content
-    queryBuilder = queryBuilder.eq("status", "published");
-
     // Apply sorting
     switch (sort_by) {
       case "price":
         queryBuilder = queryBuilder.order("price", { ascending: true });
         break;
       case "rating":
-        queryBuilder = queryBuilder.order("average_rating", { ascending: false });
+        queryBuilder = queryBuilder
+          .order("average_rating", { ascending: false })
+          .order("total_reviews", { ascending: false });
         break;
       case "newest":
-        queryBuilder = queryBuilder.order("published_at", { ascending: false, nullsFirst: false });
+        queryBuilder = queryBuilder.order("published_at", { 
+          ascending: false, 
+          nullsFirst: false 
+        });
         break;
       case "relevance":
       default:
-        // For relevance, if there's a query, order by created_at as fallback
-        // In a production environment, you'd use ts_rank for proper relevance scoring
+        // For relevance with search query, order by updated_at
         if (query && query.trim() !== "") {
-          queryBuilder = queryBuilder.order("created_at", { ascending: false });
+          queryBuilder = queryBuilder.order("updated_at", { ascending: false });
         } else {
           queryBuilder = queryBuilder.order("created_at", { ascending: false });
         }
@@ -169,10 +195,17 @@ serve(async (req) => {
     const { data, error, count } = await queryBuilder;
 
     if (error) {
+      console.error("Database error:", error);
       throw error;
     }
 
-    // Log the search (userId was already retrieved above for visibility filter)
+    // Add metadata to results to indicate if content is user's own
+    const enrichedData = (data || []).map(item => ({
+      ...item,
+      is_own_content: userId && item.uploaded_by === userId,
+    }));
+
+    // Log the search (non-blocking)
     try {
       await supabaseClient.from("search_logs").insert({
         user_id: userId,
@@ -181,13 +214,12 @@ serve(async (req) => {
         filters: filters,
       });
     } catch (logError) {
-      // Don't fail the request if logging fails
       console.error("Failed to log search:", logError);
     }
 
     // Prepare response
     const response: SearchResponse = {
-      data: data || [],
+      data: enrichedData,
       total: count || 0,
       page: validatedPage,
       page_size: validatedPageSize,

@@ -11,7 +11,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/SupabaseClient';
 import { Content } from '@/types/content.types';
-import { Search, Filter, Loader2, Star, Download, Eye, ShoppingCart } from 'lucide-react';
+import { Search, Filter, Loader2, Star, Download, Eye, ShoppingCart, Lock, EyeOff } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface SearchFilters {
@@ -47,8 +47,13 @@ const CONTENT_TYPES = [
   { value: 'guide', label: 'Guide' },
 ];
 
-// Safe BookCard component with proper null checks
-function SafeBookCard({ book }: { book: Content }) {
+// Enhanced Content type with ownership flag
+interface EnrichedContent extends Content {
+  is_own_content?: boolean;
+}
+
+// Safe BookCard component with proper null checks and private indicator
+function SafeBookCard({ book }: { book: EnrichedContent }) {
   const navigate = useNavigate();
 
   // Safe price formatting
@@ -68,10 +73,12 @@ function SafeBookCard({ book }: { book: Content }) {
   const displayPrice = formatPrice(book.price);
   const displayRating = formatRating(book.average_rating);
   const isFree = book.is_free || displayPrice === '0.00';
+  const isPrivate = book.visibility === 'private';
+  const isRestricted = book.visibility === 'restricted' || book.visibility === 'organization';
 
   return (
     <Card 
-      className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group"
+      className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer group relative"
       onClick={() => navigate(`/content/${book.id}`)}
     >
       <CardHeader className="p-0">
@@ -93,7 +100,17 @@ function SafeBookCard({ book }: { book: Content }) {
             </div>
           )}
           
-          {/* Badges */}
+          {/* Visibility Badge - Only show for private/restricted content */}
+          {(isPrivate || isRestricted) && book.is_own_content && (
+            <div className="absolute top-2 right-2">
+              <Badge className="bg-gray-800 text-white flex items-center gap-1">
+                <Lock className="w-3 h-3" />
+                {isPrivate ? 'Private' : 'Restricted'}
+              </Badge>
+            </div>
+          )}
+          
+          {/* Status Badges */}
           <div className="absolute top-2 left-2 flex flex-col gap-1">
             {book.is_featured && (
               <Badge className="bg-yellow-500 text-white">Featured</Badge>
@@ -152,6 +169,14 @@ function SafeBookCard({ book }: { book: Content }) {
             </div>
           )}
         </div>
+
+        {/* Private Content Indicator */}
+        {(isPrivate || isRestricted) && book.is_own_content && (
+          <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+            <EyeOff className="w-3 h-3" />
+            <span>Hidden from others</span>
+          </div>
+        )}
       </CardContent>
 
       <CardFooter className="p-4 pt-0 flex items-center justify-between">
@@ -184,10 +209,11 @@ export default function ContentSearch() {
   const [sortBy, setSortBy] = useState<'relevance' | 'price' | 'rating' | 'newest'>('relevance');
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
-  const [results, setResults] = useState<Content[]>([]);
+  const [results, setResults] = useState<EnrichedContent[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const { toast } = useToast();
 
@@ -210,6 +236,8 @@ export default function ContentSearch() {
   // Perform search
   const handleSearch = async () => {
     setLoading(true);
+    setHasSearched(true);
+    
     try {
       // Clean up filters - remove empty strings, undefined, and 'all' placeholder values
       const cleanFilters = Object.fromEntries(
@@ -240,7 +268,7 @@ export default function ContentSearch() {
       setTotal(data.total || 0);
       setTotalPages(data.total_pages || 0);
 
-      if (data.data?.length === 0) {
+      if (data.data?.length === 0 && (query.trim() || Object.keys(cleanFilters).length > 0)) {
         toast({
           title: 'No results found',
           description: 'Try adjusting your search or filters',
@@ -261,25 +289,33 @@ export default function ContentSearch() {
     }
   };
 
-  // Search on mount and when dependencies change
+  // Auto-search when page or sort changes (but only if user has already searched)
   useEffect(() => {
-    handleSearch();
-  }, [page, sortBy]); // Trigger search when page or sort changes
+    if (hasSearched) {
+      handleSearch();
+    }
+  }, [page, sortBy]);
 
   // Reset to page 1 when filters or query change
   const handleFilterChange = (newFilters: Partial<SearchFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
-    setPage(1); // Reset to first page
+    if (page !== 1) {
+      setPage(1);
+    }
   };
 
   const handleQueryChange = (newQuery: string) => {
     setQuery(newQuery);
-    setPage(1); // Reset to first page
+    if (page !== 1) {
+      setPage(1);
+    }
   };
 
   const handleClearFilters = () => {
     setFilters(defaultFilters);
-    setPage(1);
+    if (page !== 1) {
+      setPage(1);
+    }
   };
 
   const activeFilterCount = Object.values(filters).filter(v => {
@@ -457,7 +493,7 @@ export default function ContentSearch() {
                     <SelectContent>
                       <SelectItem value="all">All Visible to Me</SelectItem>
                       <SelectItem value="public">Public Only</SelectItem>
-                      <SelectItem value="private">Private Only</SelectItem>
+                      <SelectItem value="private">My Private Content</SelectItem>
                       <SelectItem value="organization">Organization Only</SelectItem>
                       <SelectItem value="restricted">Restricted Only</SelectItem>
                     </SelectContent>
@@ -522,7 +558,8 @@ export default function ContentSearch() {
             )}
             {filters.visibility && filters.visibility !== 'all' && (
               <Badge variant="secondary">
-                {filters.visibility.charAt(0).toUpperCase() + filters.visibility.slice(1)}
+                {filters.visibility === 'private' ? 'My Private Content' : 
+                 filters.visibility.charAt(0).toUpperCase() + filters.visibility.slice(1)}
               </Badge>
             )}
           </div>
@@ -532,6 +569,14 @@ export default function ContentSearch() {
         {loading ? (
           <div className="flex justify-center items-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !hasSearched ? (
+          <div className="text-center py-20">
+            <Search className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground text-lg">Start searching to find content</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              Enter a search term or use filters to discover books and resources
+            </p>
           </div>
         ) : results.length > 0 ? (
           <>
