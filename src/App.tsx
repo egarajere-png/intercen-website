@@ -16,9 +16,14 @@ import Auth from "./pages/Auth";
 import ProfileSetup from "./pages/ProfileSetup";
 import Profile from "./pages/Profile";
 import ContentUpload from "./pages/ContentUpload";
+import ContentManagement from "./pages/ContentManagement";
+import ContentViewPage from "./pages/ContentViewPage";
+
 import NotFound from "./pages/NotFound";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
 import ContentPublishButton from "./components/contents/ContentPublishButton";
+import ContentDeletePage from "./pages/ContentDeletePage";
+import ContentDeleteConfirmationPage from "./pages/ContentDeleteConfirmationPage";
 
 import React, { Suspense, useEffect } from "react";
 import { supabase } from "@/lib/SupabaseClient";
@@ -85,6 +90,8 @@ const App = () => {
               {/* NEW: Profile setup route after email confirmation */}
               <Route path="/profile-setup" element={<ProfileSetup />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/content-management" element={<ContentManagement />} />
+              <Route path="/content/:id" element={<ContentViewPage />} />
 
               <Route
                 path="/reset-password"
@@ -98,6 +105,8 @@ const App = () => {
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="/content/update/:id" element={<ContentUpdatePage />} />
               <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
+              <Route path="/content/delete/:id" element={<ContentDeletePage />} />
+              <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

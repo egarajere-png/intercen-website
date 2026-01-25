@@ -127,7 +127,7 @@ export default function ContentUploadPage() {
       const supabaseUrl = supabase.supabaseUrl;
 
       // Use fetch with explicit Authorization header (supabase.functions.invoke doesn't work well with FormData)
-      const response = await fetch(`${supabaseUrl}functions/v1/content-upload`, {
+      const response = await fetch(`${supabaseUrl}/functions/v1/content-upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
