@@ -25,6 +25,8 @@ import ContentPublishButton from "./components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
 import ContentDeleteConfirmationPage from "./pages/ContentDeleteConfirmationPage";
 
+import ContentSearch from "./pages/ContentSearch";
+
 import React, { Suspense, useEffect } from "react";
 import { supabase } from "@/lib/SupabaseClient";
 
@@ -108,6 +110,7 @@ const App = () => {
               <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
               <Route path="/content/delete/:id" element={<ContentDeletePage />} />
               <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
+              <Route path="/content-search" element={<ContentSearch />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>
