@@ -1,7 +1,6 @@
 // supabase/functions/content-search/index.ts
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,7 +34,7 @@ interface SearchResponse {
   total_pages: number;
 }
 
-serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -231,13 +230,14 @@ serve(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
-    console.error("Search error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Search error:", err);
     
     return new Response(
       JSON.stringify({
-        error: error.message || "An error occurred during search",
-        details: error,
+        error: err.message || "An error occurred during search",
+        details: err,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

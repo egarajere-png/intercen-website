@@ -1,6 +1,6 @@
 // supabase/functions/content-update/index.ts
 import { createClient } from '@supabase/supabase-js';
-import { multiParser } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
+import { multiParser, FormFile } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,7 +98,13 @@ const getStorageBucket = (contentType: string, mimeType: string): string => {
   return 'documets'
 }
 
-Deno.serve(async (req) => {
+// Helper to get a single FormFile from possibly array
+const getSingleFile = (file: FormFile | FormFile[] | undefined): FormFile | undefined => {
+  if (!file) return undefined
+  return Array.isArray(file) ? file[0] : file
+}
+
+Deno.serve(async (req): Promise<Response> => {
   try {
     console.log('=== CONTENT UPDATE FUNCTION START ===')
     
@@ -141,9 +147,10 @@ Deno.serve(async (req) => {
     let form
     try {
       form = await multiParser(req)
-    } catch (e) {
-      console.error('Parse error:', e.message)
-      return new Response(JSON.stringify({ error: 'Failed to parse form', details: e.message }), {
+    } catch (e: unknown) {
+      const parseErr = e as Error
+      console.error('Parse error:', parseErr.message)
+      return new Response(JSON.stringify({ error: 'Failed to parse form', details: parseErr.message }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -188,7 +195,6 @@ Deno.serve(async (req) => {
     let hasPermission = existingContent.uploaded_by === user.id
 
     if (!hasPermission && existingContent.organization_id) {
-      // Check if user is admin of the organization
       const { data: orgMember } = await supabaseAdmin
         .from('organization_members')
         .select('role')
@@ -211,8 +217,8 @@ Deno.serve(async (req) => {
     console.log('Permission granted')
 
     // Handle file replacement if new file provided
-    const newContentFile = form.files?.content_file
-    const newCoverFile = form.files?.cover_image
+    const newContentFile = getSingleFile(form.files?.content_file)
+    const newCoverFile = getSingleFile(form.files?.cover_image)
     let new_file_url = existingContent.file_url
     let new_cover_url = existingContent.cover_image_url
     let new_format = existingContent.format
@@ -222,13 +228,14 @@ Deno.serve(async (req) => {
       console.log('New content file detected, validating...')
 
       const contentExt = newContentFile.filename.split('.').pop()?.toLowerCase() || ''
-      const isValidContentMime = newContentFile.type && ALLOWED_CONTENT_MIMES.includes(newContentFile.type)
+      const contentType = (newContentFile as any).contentType || (newContentFile as any).type || ''
+      const isValidContentMime = contentType && ALLOWED_CONTENT_MIMES.includes(contentType)
       const isValidContentExt = validContentExtensions.includes(contentExt)
 
       if (!isValidContentMime && !isValidContentExt) {
         return new Response(JSON.stringify({
           error: 'Invalid content file type',
-          received_type: newContentFile.type || 'undefined',
+          received_type: contentType || 'undefined',
           received_extension: contentExt,
         }), {
           status: 400,
@@ -236,10 +243,11 @@ Deno.serve(async (req) => {
         })
       }
 
-      if (newContentFile.length > MAX_CONTENT_SIZE) {
+      const fileSize = newContentFile.content.length
+      if (fileSize > MAX_CONTENT_SIZE) {
         return new Response(JSON.stringify({
           error: 'File too large',
-          size: `${(newContentFile.length / 1024 / 1024).toFixed(2)}MB`,
+          size: `${(fileSize / 1024 / 1024).toFixed(2)}MB`,
           limit: '100MB'
         }), {
           status: 400,
@@ -248,11 +256,11 @@ Deno.serve(async (req) => {
       }
 
       // Determine bucket and MIME type
-      const content_type = (f.content_type as string)?.trim() || existingContent.content_type
+      const content_type_field = (f.content_type as string)?.trim() || existingContent.content_type
       new_format = getFormatFromFilename(newContentFile.filename)
-      const storageBucket = getStorageBucket(content_type, newContentFile.type || '')
+      const storageBucket = getStorageBucket(content_type_field, contentType)
 
-      let effectiveContentMime = newContentFile.type
+      let effectiveContentMime = contentType
       if (!effectiveContentMime || !ALLOWED_CONTENT_MIMES.includes(effectiveContentMime)) {
         effectiveContentMime = mimeMap[contentExt] || 'application/octet-stream'
       }
@@ -287,7 +295,7 @@ Deno.serve(async (req) => {
         .getPublicUrl(contentPath)
 
       new_file_url = publicUrl
-      new_file_size = newContentFile.length
+      new_file_size = fileSize
 
       console.log('New file uploaded:', new_file_url)
 
@@ -311,7 +319,6 @@ Deno.serve(async (req) => {
         console.log('Version history created for version:', existingContent.version)
       } catch (versionErr) {
         console.warn('Failed to create version history:', versionErr)
-        // Continue anyway - version history is nice to have but not critical
       }
     }
 
@@ -320,27 +327,29 @@ Deno.serve(async (req) => {
       console.log('New cover image detected')
 
       const coverExt = newCoverFile.filename.split('.').pop()?.toLowerCase() || 'jpg'
-      const isValidCoverMime = newCoverFile.type && ALLOWED_COVER_MIMES.includes(newCoverFile.type)
+      const coverType = (newCoverFile as any).contentType || (newCoverFile as any).type || ''
+      const isValidCoverMime = coverType && ALLOWED_COVER_MIMES.includes(coverType)
       const isValidCoverExt = validCoverExtensions.includes(coverExt)
 
       if (!isValidCoverMime && !isValidCoverExt) {
         return new Response(JSON.stringify({
           error: 'Invalid cover image type',
-          received_type: newCoverFile.type || 'undefined',
+          received_type: coverType || 'undefined',
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      if (newCoverFile.length > MAX_COVER_SIZE) {
+      const coverSize = newCoverFile.content.length
+      if (coverSize > MAX_COVER_SIZE) {
         return new Response(JSON.stringify({ error: 'Cover too large' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      let effectiveCoverMime = newCoverFile.type
+      let effectiveCoverMime = coverType
       if (!effectiveCoverMime || !ALLOWED_COVER_MIMES.includes(effectiveCoverMime)) {
         effectiveCoverMime = mimeMap[coverExt] || 'image/jpeg'
       }
@@ -366,7 +375,7 @@ Deno.serve(async (req) => {
     }
 
     // Build update object
-    const updates: any = {
+    const updates: Record<string, any> = {
       updated_at: new Date().toISOString(),
     }
 
@@ -449,7 +458,6 @@ Deno.serve(async (req) => {
         console.log('Search vector updated')
       } catch (searchErr) {
         console.warn('Failed to update search vector:', searchErr)
-        // Continue anyway - search update is not critical
       }
     }
 
@@ -503,17 +511,18 @@ Deno.serve(async (req) => {
       }
     )
 
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', error.constructor?.name || 'Unknown')
-    console.error('Message:', error.message || 'No message')
-    console.error('Stack:', error.stack || 'No stack')
+    console.error('Type:', err.constructor?.name || 'Unknown')
+    console.error('Message:', err.message || 'No message')
+    console.error('Stack:', err.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: error.message || 'Unknown error',
-        type: error.constructor?.name || 'Error'
+        message: err.message || 'Unknown error',
+        type: err.constructor?.name || 'Error'
       }),
       {
         status: 500,
