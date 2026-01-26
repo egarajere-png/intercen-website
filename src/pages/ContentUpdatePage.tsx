@@ -127,7 +127,7 @@ export default function ContentUpdatePage() {
         language: data.language || 'en',
         visibility: data.visibility || 'private',
         status: data.status || 'draft',
-        contentType: data.content_type || '',
+        contentType: (data.content_type || 'book') as any,
         category_id: data.category_id || '',
         version: data.version || '1.0',
         page_count: data.page_count?.toString() || '',
@@ -148,11 +148,11 @@ export default function ContentUpdatePage() {
   const loadVersionHistory = async () => {
     try {
       const { data, error } = await supabase
-        .rpc('get_content_version_history', { p_content_id: id });
+        .rpc('get_content_version_history' as any, { p_content_id: id });
 
       if (error) throw error;
 
-      setVersionHistory(data || []);
+      setVersionHistory((data as any) || []);
       setShowVersionHistory(true);
     } catch (err: any) {
       console.error('Version history error:', err);
@@ -244,7 +244,7 @@ export default function ContentUpdatePage() {
       if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
 
-      const supabaseUrl = supabase.supabaseUrl;
+      const supabaseUrl = 'https://nnljrawwhibazudjudht.supabase.co';
       
       const response = await fetch(`${supabaseUrl}/functions/v1/content-update`, {
         method: 'POST',

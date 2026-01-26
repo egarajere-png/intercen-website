@@ -108,7 +108,7 @@ const ProfilePage: React.FC = () => {
         setAddress(data.address || '');
         setOrganization(data.organization || '');
         setDepartment(data.department || '');
-        setAccountType(data.account_type || 'personal');
+        setAccountType((data.account_type || 'personal') as any);
         setRole(data.role || 'reader');
         setAvatarUrl(data.avatar_url || '');
       } catch (err) {

@@ -22,7 +22,7 @@ interface ValidationError {
   message: string
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req): Promise<Response> => {
   try {
     console.log('=== CONTENT PUBLISH FUNCTION START ===')
     
@@ -314,17 +314,18 @@ Deno.serve(async (req) => {
       )
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', error.constructor?.name || 'Unknown')
-    console.error('Message:', error.message || 'No message')
-    console.error('Stack:', error.stack || 'No stack')
+    console.error('Type:', err.constructor?.name || 'Unknown')
+    console.error('Message:', err.message || 'No message')
+    console.error('Stack:', err.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: error.message || 'Unknown error',
-        type: error.constructor?.name || 'Error'
+        message: err.message || 'Unknown error',
+        type: err.constructor?.name || 'Error'
       }),
       {
         status: 500,
