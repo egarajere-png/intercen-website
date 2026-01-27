@@ -1,5 +1,3 @@
-// supabase/functions/content-search/index.ts
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -11,6 +9,7 @@ const corsHeaders = {
 interface SearchFilters {
   category_id?: string;
   content_type?: string;
+  content_types?: string[];
   price_min?: number;
   price_max?: number;
   min_rating?: number;
@@ -43,9 +42,16 @@ serve(async (req) => {
 
   try {
     // Initialize Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Missing Supabase environment variables");
+    }
+
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      supabaseUrl,
+      supabaseAnonKey,
       {
         global: {
           headers: { Authorization: req.headers.get("Authorization")! },
@@ -54,12 +60,13 @@ serve(async (req) => {
     );
 
     // Get authenticated user
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const {
+      data: { user },
+    } = await supabaseClient.auth.getUser();
     const userId = user?.id || null;
 
     // Parse request body
     const requestBody: SearchRequest = await req.json();
-    
     const {
       query = "",
       filters = {},
@@ -104,36 +111,42 @@ serve(async (req) => {
 
     // Apply full-text search if query is provided
     if (query && query.trim() !== "") {
-      const searchQuery = query.trim().replace(/\s+/g, ' ');
+      const searchQuery = query.trim().replace(/\s+/g, " ");
       
       // Build search conditions
       const searchConditions: string[] = [];
-      
+
       // Search in title (case-insensitive)
       searchConditions.push(`title.ilike.%${searchQuery}%`);
-      
+
       // Search in description
       searchConditions.push(`description.ilike.%${searchQuery}%`);
-      
+
       // Search in author
       searchConditions.push(`author.ilike.%${searchQuery}%`);
-      
+
       // Search in subtitle
       searchConditions.push(`subtitle.ilike.%${searchQuery}%`);
-      
+
+      // Search in ISBN
+      searchConditions.push(`isbn.ilike.%${searchQuery}%`);
+
       // Combine with OR
-      queryBuilder = queryBuilder.or(searchConditions.join(','));
+      queryBuilder = queryBuilder.or(searchConditions.join(","));
     }
 
     // Apply other filters
-    
     // Category filter
     if (filters.category_id) {
       queryBuilder = queryBuilder.eq("category_id", filters.category_id);
     }
 
-    // Content type filter
-    if (filters.content_type) {
+    // Content type filter - support both single and multiple types
+    if (filters.content_types && filters.content_types.length > 0) {
+      // Multiple content types - use .in() operator
+      queryBuilder = queryBuilder.in("content_type", filters.content_types);
+    } else if (filters.content_type) {
+      // Single content type
       queryBuilder = queryBuilder.eq("content_type", filters.content_type);
     }
 
@@ -171,9 +184,9 @@ serve(async (req) => {
           .order("total_reviews", { ascending: false });
         break;
       case "newest":
-        queryBuilder = queryBuilder.order("published_at", { 
-          ascending: false, 
-          nullsFirst: false 
+        queryBuilder = queryBuilder.order("published_at", {
+          ascending: false,
+          nullsFirst: false,
         });
         break;
       case "relevance":
@@ -200,7 +213,7 @@ serve(async (req) => {
     }
 
     // Add metadata to results to indicate if content is user's own
-    const enrichedData = (data || []).map(item => ({
+    const enrichedData = (data || []).map((item) => ({
       ...item,
       is_own_content: userId && item.uploaded_by === userId,
     }));
@@ -215,6 +228,7 @@ serve(async (req) => {
       });
     } catch (logError) {
       console.error("Failed to log search:", logError);
+      // Don't fail the request if logging fails
     }
 
     // Prepare response
@@ -227,20 +241,27 @@ serve(async (req) => {
     };
 
     return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
       status: 200,
     });
-
   } catch (error) {
     console.error("Search error:", error);
     
+    const errorMessage = error instanceof Error ? error.message : "An error occurred during search";
+    
     return new Response(
       JSON.stringify({
-        error: error.message || "An error occurred during search",
-        details: error,
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : String(error),
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
         status: 400,
       }
     );
