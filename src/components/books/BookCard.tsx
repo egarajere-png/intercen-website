@@ -73,11 +73,11 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
               <div className="flex items-center justify-between mt-auto">
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-bold text-primary">
-                    ${book.price.toFixed(2)}
+                    Ksh {book.price.toFixed(2)}
                   </span>
                   {book.originalPrice && (
                     <span className="text-sm text-muted-foreground line-through">
-                      ${book.originalPrice.toFixed(2)}
+                      Ksh {book.originalPrice.toFixed(2)}
                     </span>
                   )}
                 </div>
@@ -166,11 +166,11 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
 
           <div className="flex items-baseline gap-2">
             <span className="text-lg font-bold text-primary">
-              ${book.price.toFixed(2)}
+              Ksh {book.price.toFixed(2)}
             </span>
             {book.originalPrice && (
               <span className="text-xs text-muted-foreground line-through">
-                ${book.originalPrice.toFixed(2)}
+                Ksh {book.originalPrice.toFixed(2)}
               </span>
             )}
           </div>

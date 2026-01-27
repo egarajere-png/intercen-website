@@ -266,10 +266,10 @@ const Books = () => {
           {[
             { value: 'all', label: 'All Prices' },
             { value: 'free', label: 'Free' },
-            { value: 'under-15', label: 'Under $15' },
-            { value: '15-25', label: '$15 - $25' },
-            { value: '25-50', label: '$25 - $50' },
-            { value: 'over-50', label: 'Over $50' },
+            { value: 'under-15', label: 'Under Ksh 2,000' },
+            { value: '15-25', label: 'Ksh 2,000 - Ksh 3,500' },
+            { value: '25-50', label: 'Ksh 3,500 - Ksh 7,000' },
+            { value: 'over-50', label: 'Over Ksh 7,000' },
           ].map(range => (
             <label
               key={range.value}
@@ -466,10 +466,10 @@ const Books = () => {
                 {priceRange !== 'all' && (
                   <Badge variant="secondary" className="gap-2">
                     {priceRange === 'free' && 'Free'}
-                    {priceRange === 'under-15' && 'Under $15'}
-                    {priceRange === '15-25' && '$15 - $25'}
-                    {priceRange === '25-50' && '$25 - $50'}
-                    {priceRange === 'over-50' && 'Over $50'}
+                    {priceRange === 'under-15' && 'Under Ksh 2,000'}
+                    {priceRange === '15-25' && 'Ksh 2,000 - Ksh 3,500'}
+                    {priceRange === '25-50' && 'Ksh 3,500 - Ksh 7,000'}
+                    {priceRange === 'over-50' && 'Over Ksh 7,000'}
                     <button
                       onClick={() => {
                         setPriceRange('all');

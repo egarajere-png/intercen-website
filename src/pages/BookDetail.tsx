@@ -141,11 +141,11 @@ const BookDetail = () => {
             {/* Price */}
             <div className="flex items-baseline gap-3">
               <span className="text-4xl font-bold text-primary">
-                ${book.price.toFixed(2)}
+                Ksh {book.price.toFixed(2)}
               </span>
               {book.originalPrice && (
                 <span className="text-xl text-muted-foreground line-through">
-                  ${book.originalPrice.toFixed(2)}
+                  Ksh {book.originalPrice.toFixed(2)}
                 </span>
               )}
             </div>
