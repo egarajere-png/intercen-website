@@ -46,8 +46,8 @@ const BookDetail = () => {
   const images = [book.coverImage, book.backCoverImage || book.coverImage];
   const relatedBooks = mockBooks.filter(b => b.category === book.category && b.id !== book.id).slice(0, 4);
 
-  const handleAddToCart = () => {
-    addToCart(book, quantity);
+  const handleAddToCart = async () => {
+    await addToCart(book, quantity);
   };
 
   return (
