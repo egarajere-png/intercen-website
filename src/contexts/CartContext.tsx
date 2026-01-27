@@ -18,8 +18,8 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addToCart = useCallback((book: Book, quantity = 1) => {
-    if (!isAuthenticated()) {
+  const addToCart = useCallback(async (book: Book, quantity = 1) => {
+    if (!(await isAuthenticated())) {
       toast.error('You must be logged in to add items to your cart.');
       return;
     }
@@ -38,8 +38,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  const removeFromCart = useCallback((bookId: string) => {
-    if (!isAuthenticated()) {
+  const removeFromCart = useCallback(async (bookId: string) => {
+    if (!(await isAuthenticated())) {
       toast.error('You must be logged in to remove items from your cart.');
       return;
     }
@@ -52,8 +52,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  const updateQuantity = useCallback((bookId: string, quantity: number) => {
-    if (!isAuthenticated()) {
+  const updateQuantity = useCallback(async (bookId: string, quantity: number) => {
+    if (!(await isAuthenticated())) {
       toast.error('You must be logged in to update your cart.');
       return;
     }
@@ -68,8 +68,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, [removeFromCart]);
 
-  const clearCart = useCallback(() => {
-    if (!isAuthenticated()) {
+  const clearCart = useCallback(async () => {
+    if (!(await isAuthenticated())) {
       toast.error('You must be logged in to clear your cart.');
       return;
     }
