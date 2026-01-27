@@ -16,7 +16,7 @@ import mappymaria from "@/assets/mappymaria.jpg";
 import maragoli from "@/assets/maragolidictionary.jpg";
 import mourninglory from "@/assets/mourningglory.png";
 import onetouch from "@/assets/onetouch.jpg";
-import safari from "@/assets/Safari.jpg";
+import safari from "@/assets/katikasafari.jpg";
 import soaring from "@/assets/soaring.jpg";
 import stern from "@/assets/sternmom.jpg";
 import birds from "@/assets/tellittobirds.jpg";
