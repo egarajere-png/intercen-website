@@ -1,6 +1,5 @@
-// supabase/functions/content-search/index.ts
-
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +9,7 @@ const corsHeaders = {
 interface SearchFilters {
   category_id?: string;
   content_type?: string;
+  content_types?: string[];
   price_min?: number;
   price_max?: number;
   min_rating?: number;
@@ -34,7 +34,7 @@ interface SearchResponse {
   total_pages: number;
 }
 
-Deno.serve(async (req): Promise<Response> => {
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -42,9 +42,16 @@ Deno.serve(async (req): Promise<Response> => {
 
   try {
     // Initialize Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Missing Supabase environment variables");
+    }
+
     const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      supabaseUrl,
+      supabaseAnonKey,
       {
         global: {
           headers: { Authorization: req.headers.get("Authorization")! },
@@ -53,12 +60,13 @@ Deno.serve(async (req): Promise<Response> => {
     );
 
     // Get authenticated user
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const {
+      data: { user },
+    } = await supabaseClient.auth.getUser();
     const userId = user?.id || null;
 
     // Parse request body
     const requestBody: SearchRequest = await req.json();
-    
     const {
       query = "",
       filters = {},
@@ -103,36 +111,42 @@ Deno.serve(async (req): Promise<Response> => {
 
     // Apply full-text search if query is provided
     if (query && query.trim() !== "") {
-      const searchQuery = query.trim().replace(/\s+/g, ' ');
+      const searchQuery = query.trim().replace(/\s+/g, " ");
       
       // Build search conditions
       const searchConditions: string[] = [];
-      
+
       // Search in title (case-insensitive)
       searchConditions.push(`title.ilike.%${searchQuery}%`);
-      
+
       // Search in description
       searchConditions.push(`description.ilike.%${searchQuery}%`);
-      
+
       // Search in author
       searchConditions.push(`author.ilike.%${searchQuery}%`);
-      
+
       // Search in subtitle
       searchConditions.push(`subtitle.ilike.%${searchQuery}%`);
-      
+
+      // Search in ISBN
+      searchConditions.push(`isbn.ilike.%${searchQuery}%`);
+
       // Combine with OR
-      queryBuilder = queryBuilder.or(searchConditions.join(','));
+      queryBuilder = queryBuilder.or(searchConditions.join(","));
     }
 
     // Apply other filters
-    
     // Category filter
     if (filters.category_id) {
       queryBuilder = queryBuilder.eq("category_id", filters.category_id);
     }
 
-    // Content type filter
-    if (filters.content_type) {
+    // Content type filter - support both single and multiple types
+    if (filters.content_types && filters.content_types.length > 0) {
+      // Multiple content types - use .in() operator
+      queryBuilder = queryBuilder.in("content_type", filters.content_types);
+    } else if (filters.content_type) {
+      // Single content type
       queryBuilder = queryBuilder.eq("content_type", filters.content_type);
     }
 
@@ -170,9 +184,9 @@ Deno.serve(async (req): Promise<Response> => {
           .order("total_reviews", { ascending: false });
         break;
       case "newest":
-        queryBuilder = queryBuilder.order("published_at", { 
-          ascending: false, 
-          nullsFirst: false 
+        queryBuilder = queryBuilder.order("published_at", {
+          ascending: false,
+          nullsFirst: false,
         });
         break;
       case "relevance":
@@ -199,7 +213,7 @@ Deno.serve(async (req): Promise<Response> => {
     }
 
     // Add metadata to results to indicate if content is user's own
-    const enrichedData = (data || []).map(item => ({
+    const enrichedData = (data || []).map((item) => ({
       ...item,
       is_own_content: userId && item.uploaded_by === userId,
     }));
@@ -214,6 +228,7 @@ Deno.serve(async (req): Promise<Response> => {
       });
     } catch (logError) {
       console.error("Failed to log search:", logError);
+      // Don't fail the request if logging fails
     }
 
     // Prepare response
@@ -226,21 +241,27 @@ Deno.serve(async (req): Promise<Response> => {
     };
 
     return new Response(JSON.stringify(response), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
       status: 200,
     });
-
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error("Search error:", err);
+  } catch (error) {
+    console.error("Search error:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : "An error occurred during search";
     
     return new Response(
       JSON.stringify({
-        error: err.message || "An error occurred during search",
-        details: err,
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : String(error),
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
         status: 400,
       }
     );

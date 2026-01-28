@@ -1,3 +1,8 @@
+/**
+ * Books/Content Library Page
+ * Displays content with search, filtering, and add-to-cart functionality
+ */
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, Filter, X } from 'lucide-react';
@@ -23,41 +28,79 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { categories } from '@/data/mockBooks';
 import { Content } from '@/types/content.types';
+import { supabase } from '@/lib/SupabaseClient';
+import { useToast } from '@/hooks/use-toast';
+import { useCart } from '@/contexts/CartContext';
+
+// All content types from the database
+const CONTENT_TYPES = [
+  { value: 'book', label: 'Book' },
+  { value: 'ebook', label: 'E-Book' },
+  { value: 'document', label: 'Document' },
+  { value: 'paper', label: 'Paper' },
+  { value: 'report', label: 'Report' },
+  { value: 'manual', label: 'Manual' },
+  { value: 'guide', label: 'Guide' },
+];
 
 const Books = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState('featured');
   const [priceRange, setPriceRange] = useState<string>('all');
-  const [books, setBooks] = useState<Content[]>([]);
+  const [visibility, setVisibility] = useState<string>('all');
+  const [content, setContent] = useState<Content[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [addingToCart, setAddingToCart] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { addToCart: addToCartContext } = useCart();
 
   useEffect(() => {
     const fetchContent = async () => {
       setLoading(true);
+      setError(null);
       
       // Build filters for edge function
       let filters: any = {};
       
+      // Filter by category
       if (selectedCategories.length === 1) {
         const cat = categories.find(c => c.slug === selectedCategories[0]);
         if (cat) filters.category_id = cat.id;
       }
       
+      // Filter by content types
+      if (selectedContentTypes.length > 0) {
+        filters.content_types = selectedContentTypes;
+      }
+      
+      // Filter by price range
       if (priceRange !== 'all') {
-        if (priceRange === 'under-15') filters.price_max = 15;
-        if (priceRange === '15-25') {
-          filters.price_min = 15;
-          filters.price_max = 25;
+        if (priceRange === 'free') {
+          filters.is_free = true;
+        } else if (priceRange === 'under-15') {
+          filters.price_max = 2000;
+        } else if (priceRange === '15-25') {
+          filters.price_min = 2000;
+          filters.price_max = 3500;
+        } else if (priceRange === '25-50') {
+          filters.price_min = 3500;
+          filters.price_max = 7000;
+        } else if (priceRange === 'over-50') {
+          filters.price_min = 7000;
         }
-        if (priceRange === '25-50') {
-          filters.price_min = 25;
-          filters.price_max = 50;
-        }
-        if (priceRange === 'over-50') filters.price_min = 50;
+      }
+
+      // Filter by visibility (only show public content by default)
+      if (visibility === 'all') {
+        filters.visibility = 'public';
+      } else if (visibility !== 'any') {
+        filters.visibility = visibility;
       }
 
       // Map sortBy to edge function sort_by
@@ -80,9 +123,31 @@ const Books = () => {
       }
 
       try {
-        const res = await fetch('/functions/v1/content-search', {
+        // Get the current session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        // Get Supabase URL from the client
+        const supabaseUrl = supabase.supabaseUrl || import.meta.env.VITE_SUPABASE_URL;
+        
+        if (!supabaseUrl) {
+          throw new Error('Supabase URL is not configured');
+        }
+
+        // Construct the edge function URL
+        const edgeFunctionUrl = `${supabaseUrl}/functions/v1/content-search`;
+        
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add authorization header if user is logged in
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
+        const res = await fetch(edgeFunctionUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             query: searchQuery,
             filters,
@@ -91,13 +156,21 @@ const Books = () => {
             page_size: 40,
           }),
         });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('Edge function error response:', errorText);
+          throw new Error(`HTTP error! status: ${res.status}, message: ${errorText}`);
+        }
+
         const result = await res.json();
-        setBooks(result.data || []);
+        setContent(result.data || []);
         setTotalPages(result.total_pages || 1);
         setTotalResults(result.total || 0);
       } catch (e) {
         console.error('Failed to fetch content:', e);
-        setBooks([]);
+        setError(e instanceof Error ? e.message : 'Failed to fetch content');
+        setContent([]);
         setTotalPages(1);
         setTotalResults(0);
       }
@@ -106,7 +179,35 @@ const Books = () => {
     };
     
     fetchContent();
-  }, [searchQuery, selectedCategories, sortBy, priceRange, page]);
+  }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page]);
+
+  const handleAddToCart = async (contentId: string, quantity: number = 1) => {
+    try {
+      setAddingToCart(contentId);
+
+      // Find the content item to pass as a book object
+      const contentItem = content.find(c => c.id === contentId);
+      if (!contentItem) {
+        throw new Error('Content not found');
+      }
+
+      // Create a book object for CartContext
+      const book = {
+        id: contentItem.id,
+        title: contentItem.title || 'Untitled',
+        author: contentItem.author,
+        price: contentItem.price ?? 0,
+      };
+
+      // Use CartContext which handles edge function calls
+      await addToCartContext(book, quantity);
+    } catch (error: any) {
+      console.error('Error adding to cart:', error);
+      // Error handling is done in CartContext
+    } finally {
+      setAddingToCart(null);
+    }
+  };
 
   const toggleCategory = (category: string) => {
     setSelectedCategories(prev =>
@@ -114,23 +215,59 @@ const Books = () => {
         ? prev.filter(c => c !== category)
         : [...prev, category]
     );
-    setPage(1); // Reset to first page when filter changes
+    setPage(1);
+  };
+
+  const toggleContentType = (contentType: string) => {
+    setSelectedContentTypes(prev =>
+      prev.includes(contentType)
+        ? prev.filter(c => c !== contentType)
+        : [...prev, contentType]
+    );
+    setPage(1);
   };
 
   const clearAllFilters = () => {
     setSelectedCategories([]);
+    setSelectedContentTypes([]);
     setPriceRange('all');
+    setVisibility('all');
     setSearchQuery('');
     setPage(1);
   };
 
-  const hasActiveFilters = selectedCategories.length > 0 || priceRange !== 'all' || searchQuery !== '';
+  const hasActiveFilters = 
+    selectedCategories.length > 0 || 
+    selectedContentTypes.length > 0 || 
+    priceRange !== 'all' || 
+    visibility !== 'all' || 
+    searchQuery !== '';
 
-  // No frontend filtering/sorting; all handled by edge function
-  const sortedBooks = books;
+  const sortedContent = content;
 
   const FilterSidebar = () => (
     <div className="space-y-6">
+      {/* Content Types */}
+      <div>
+        <h3 className="font-semibold mb-4 text-foreground">Content Type</h3>
+        <div className="space-y-3">
+          {CONTENT_TYPES.map(type => (
+            <label
+              key={type.value}
+              className="flex items-center gap-3 cursor-pointer group"
+            >
+              <Checkbox
+                checked={selectedContentTypes.includes(type.value)}
+                onCheckedChange={() => toggleContentType(type.value)}
+              />
+              <span className="text-sm group-hover:text-primary transition-colors">
+                {type.label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       {/* Categories */}
       <div>
         <h3 className="font-semibold mb-4 text-foreground">Categories</h3>
@@ -161,10 +298,11 @@ const Books = () => {
         <div className="space-y-3">
           {[
             { value: 'all', label: 'All Prices' },
-            { value: 'under-15', label: 'Under $15' },
-            { value: '15-25', label: '$15 - $25' },
-            { value: '25-50', label: '$25 - $50' },
-            { value: 'over-50', label: 'Over $50' },
+            { value: 'free', label: 'Free' },
+            { value: 'under-15', label: 'Under Ksh 2,000' },
+            { value: '15-25', label: 'Ksh 2,000 - Ksh 3,500' },
+            { value: '25-50', label: 'Ksh 3,500 - Ksh 7,000' },
+            { value: 'over-50', label: 'Over Ksh 7,000' },
           ].map(range => (
             <label
               key={range.value}
@@ -209,17 +347,19 @@ const Books = () => {
               Home
             </Link>
             <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
-            <span className="text-foreground">Books</span>
+            <span className="text-foreground">Content Library</span>
           </nav>
           <h1 className="headline-2 mb-2">
-            Browse Our Collection
+            Browse Our Content Library
           </h1>
           <p className="body-2 text-muted-foreground">
             {loading ? (
               'Loading content...'
+            ) : error ? (
+              <span className="text-destructive">Error loading content</span>
             ) : (
               <>
-                Discover {totalResults > 0 ? `${totalResults}+` : '0'} items across all content types
+                Discover {totalResults > 0 ? `${totalResults}+` : '0'} books, documents, papers, and more
               </>
             )}
           </p>
@@ -249,7 +389,7 @@ const Books = () => {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search books, authors, ISBN..."
+                  placeholder="Search content, authors, titles, ISBN..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
@@ -295,7 +435,7 @@ const Books = () => {
                     Filters
                     {hasActiveFilters && (
                       <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center">
-                        {selectedCategories.length + (priceRange !== 'all' ? 1 : 0)}
+                        {selectedCategories.length + selectedContentTypes.length + (priceRange !== 'all' ? 1 : 0)}
                       </Badge>
                     )}
                   </Button>
@@ -328,6 +468,20 @@ const Books = () => {
                     </button>
                   </Badge>
                 )}
+                {selectedContentTypes.map(type => {
+                  const contentType = CONTENT_TYPES.find(ct => ct.value === type);
+                  return (
+                    <Badge key={type} variant="secondary" className="gap-2">
+                      {contentType?.label}
+                      <button
+                        onClick={() => toggleContentType(type)}
+                        className="hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
                 {selectedCategories.map(category => {
                   const cat = categories.find(c => c.slug === category);
                   return (
@@ -344,10 +498,11 @@ const Books = () => {
                 })}
                 {priceRange !== 'all' && (
                   <Badge variant="secondary" className="gap-2">
-                    {priceRange === 'under-15' && 'Under $15'}
-                    {priceRange === '15-25' && '$15 - $25'}
-                    {priceRange === '25-50' && '$25 - $50'}
-                    {priceRange === 'over-50' && 'Over $50'}
+                    {priceRange === 'free' && 'Free'}
+                    {priceRange === 'under-15' && 'Under Ksh 2,000'}
+                    {priceRange === '15-25' && 'Ksh 2,000 - Ksh 3,500'}
+                    {priceRange === '25-50' && 'Ksh 3,500 - Ksh 7,000'}
+                    {priceRange === 'over-50' && 'Over Ksh 7,000'}
                     <button
                       onClick={() => {
                         setPriceRange('all');
@@ -370,14 +525,29 @@ const Books = () => {
               </div>
             )}
 
+            {/* Error Message */}
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
+                <p className="text-sm text-destructive font-medium mb-2">Failed to load content</p>
+                <p className="text-xs text-muted-foreground mb-3">{error}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.location.reload()}
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+
             {/* Results Count */}
-            {!loading && sortedBooks.length > 0 && (
+            {!loading && !error && sortedContent.length > 0 && (
               <div className="mb-4 text-sm text-muted-foreground">
                 Showing {((page - 1) * 40) + 1} - {Math.min(page * 40, totalResults)} of {totalResults} results
               </div>
             )}
 
-            {/* Books Grid */}
+            {/* Content Grid */}
             {loading ? (
               <div className="flex justify-center items-center py-16">
                 <div className="flex flex-col items-center gap-4">
@@ -385,11 +555,10 @@ const Books = () => {
                   <span className="text-muted-foreground">Loading content...</span>
                 </div>
               </div>
-            ) : sortedBooks.length > 0 ? (
+            ) : sortedContent.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                  {sortedBooks.map((item, index) => {
-                    // Map Content to Book shape for BookCard with accurate data from upload/update structure
+                  {sortedContent.map((item, index) => {
                     const book = {
                       id: item.id,
                       title: item.title || 'Untitled',
@@ -398,7 +567,7 @@ const Books = () => {
                       price: item.price ?? 0,
                       originalPrice: undefined,
                       description: item.description || '',
-                      synopsis: item.description || '', // Use description as synopsis fallback
+                      synopsis: item.description || '',
                       category: item.category_id || '',
                       coverImage: item.cover_image_url || '/placeholder-book-cover.png',
                       backCoverImage: undefined,
@@ -412,7 +581,6 @@ const Books = () => {
                       language: item.language || 'en',
                       featured: item.is_featured ?? false,
                       bestseller: item.is_bestseller ?? false,
-                      // Additional fields from content structure
                       format: item.format || 'pdf',
                       version: item.version || '1.0',
                       contentType: item.content_type || 'book',
@@ -422,6 +590,10 @@ const Books = () => {
                       isForSale: item.is_for_sale ?? true,
                       fileUrl: item.file_url || '',
                       fileSizeBytes: item.file_size_bytes || 0,
+                      subtitle: item.subtitle || '',
+                      department: item.department || '',
+                      documentNumber: item.document_number || '',
+                      confidentiality: item.confidentiality || '',
                     };
                     
                     return (
@@ -430,7 +602,11 @@ const Books = () => {
                         className="animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <BookCard book={book} />
+                        <BookCard 
+                          book={book} 
+                          onAddToCart={handleAddToCart}
+                          isAddingToCart={addingToCart === book.id}
+                        />
                       </div>
                     );
                   })}
@@ -453,7 +629,6 @@ const Books = () => {
                       </Button>
                       
                       <div className="flex items-center gap-1">
-                        {/* Show first page */}
                         {page > 3 && (
                           <>
                             <Button
@@ -470,7 +645,6 @@ const Books = () => {
                           </>
                         )}
                         
-                        {/* Show pages around current page */}
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                           const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
                           if (pageNum <= totalPages) {
@@ -491,7 +665,6 @@ const Books = () => {
                           return null;
                         })}
                         
-                        {/* Show last page */}
                         {page < totalPages - 2 && (
                           <>
                             {page < totalPages - 3 && <span className="px-2">...</span>}
@@ -533,7 +706,7 @@ const Books = () => {
                 <div className="mb-4">
                   <Search className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
                   <p className="text-muted-foreground text-lg mb-2">
-                    No books found matching your criteria
+                    No content found matching your criteria
                   </p>
                   <p className="text-sm text-muted-foreground mb-6">
                     Try adjusting your filters or search query

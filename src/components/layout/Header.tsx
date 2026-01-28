@@ -57,8 +57,8 @@ export const Header = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { getItemCount } = useCart();
-  const itemCount = getItemCount();
+  const { getItemCount, cart } = useCart();
+  const itemCount = React.useMemo(() => getItemCount(), [cart]);
 
   const [loggedIn, setLoggedIn] = useState(false);
 
