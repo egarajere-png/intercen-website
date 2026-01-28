@@ -88,8 +88,8 @@ export const Header = () => {
           />
         </Link>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-8">
+        {/* Desktop Navigation - Only show on large screens (lg and up) */}
+        <nav className="hidden lg:flex items-center gap-8">
           {navLinks.map(link => (
             <Link
               key={link.href}
@@ -110,11 +110,11 @@ export const Header = () => {
 
         {/* Actions */}
         <div className="flex items-center gap-2 md:gap-4">
-          {/* Search Toggle */}
+          {/* Search Toggle - Only show on lg screens */}
           <Button
             variant="ghost"
             size="icon"
-            className="hidden md:flex"
+            className="hidden lg:flex"
             onClick={() => setIsSearchOpen(!isSearchOpen)}
           >
             <Search className="h-5 w-5" />
@@ -134,46 +134,80 @@ export const Header = () => {
             </Button>
           </Link>
 
-          {/* User Account */}
-          {/* User Account Dropdown (Desktop) */}
-          <span className="hidden md:flex">
+          {/* User Account Dropdown (Desktop - lg and up) */}
+          <span className="hidden lg:flex">
             <UserDropdown loggedIn={loggedIn} setLoggedIn={setLoggedIn} />
           </span>
 
-          {/* Mobile Menu Toggle */}
+          {/* Mobile/Tablet Menu Toggle - Show on screens smaller than lg */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="lg:hidden">
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[350px]">
-              <nav className="flex flex-col gap-4 mt-8">
-                {navLinks.map(link => (
+            <SheetContent side="right" className="w-[300px] sm:w-[380px] p-0">
+              {/* Header with close area */}
+              <div className="p-6 border-b border-border bg-muted/30">
+                <img 
+                  src={intercenLogo} 
+                  alt="InterCEN Books" 
+                  className="h-10 w-auto"
+                />
+              </div>
+              
+              <nav className="flex flex-col p-6">
+                {/* Navigation Links */}
+                <div className="space-y-1">
+                  {navLinks.map(link => (
+                    <Link
+                      key={link.href}
+                      to={link.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium transition-all hover:bg-accent hover:text-primary ${
+                        location.pathname === link.href
+                          ? 'bg-primary/10 text-primary border-l-4 border-primary'
+                          : 'text-foreground'
+                      }`}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                </div>
+                
+                <div className="h-px bg-border my-6" />
+                
+                {/* User Section */}
+                <div className="space-y-2">
+                  <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Account
+                  </p>
+                  <UserDropdown loggedIn={loggedIn} setLoggedIn={setLoggedIn} isMobile onNavigate={() => setIsMobileMenuOpen(false)} />
                   <Link
-                    key={link.href}
-                    to={link.href}
+                    to="/cart"
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`text-lg font-medium py-2 transition-colors hover:text-primary ${
-                      location.pathname === link.href
-                        ? 'text-primary'
-                        : 'text-foreground'
-                    }`}
+                    className="flex items-center gap-3 px-4 py-3 rounded-lg text-base font-medium hover:bg-accent hover:text-primary transition-all"
                   >
-                    {link.label}
+                    <ShoppingCart className="h-5 w-5" />
+                    Cart
+                    {itemCount > 0 && (
+                      <Badge className="ml-auto bg-secondary text-secondary-foreground">
+                        {itemCount}
+                      </Badge>
+                    )}
                   </Link>
-                ))}
-                <div className="h-px bg-border my-4" />
-                {/* User Account Dropdown (Mobile) */}
-                <UserDropdown loggedIn={loggedIn} setLoggedIn={setLoggedIn} isMobile onNavigate={() => setIsMobileMenuOpen(false)} />
-                <Link
-                  to="/cart"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex items-center gap-3 text-lg font-medium py-2 hover:text-primary"
-                >
-                  <ShoppingCart className="h-5 w-5" />
-                  Cart ({itemCount})
-                </Link>
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 px-4 py-3 h-auto text-base font-medium hover:bg-accent hover:text-primary"
+                    onClick={() => {
+                      setIsSearchOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <Search className="h-5 w-5" />
+                    Search
+                  </Button>
+                </div>
               </nav>
             </SheetContent>
           </Sheet>
