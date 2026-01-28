@@ -19,13 +19,12 @@ import Profile from "./pages/Profile";
 import ContentUpload from "./pages/ContentUpload";
 import ContentManagement from "./pages/ContentManagement";
 import ContentViewPage from "./pages/ContentViewPage";
-
 import NotFound from "./pages/NotFound";
+import CheckoutPayment from "./pages/CheckoutPayment";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
 import ContentPublishButton from "./components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
 import ContentDeleteConfirmationPage from "./pages/ContentDeleteConfirmationPage";
-
 import ContentSearch from "./pages/ContentSearch";
 
 import React, { Suspense, useEffect } from "react";
@@ -77,6 +76,7 @@ const App = () => {
         <CartProvider>
           <Toaster />
           <Sonner />
+
           <BrowserRouter>
             <PageTransition>
               <Routes>
@@ -84,6 +84,7 @@ const App = () => {
                 <Route path="/books" element={<Books />} />
                 <Route path="/books/:id" element={<BookDetail />} />
                 <Route path="/cart" element={<Cart />} />
+                <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
                 <Route path="/about" element={<About />} />
                 <Route path="/publish" element={<PublishWithUs />} />
                 <Route path="/services" element={<ProductsServices />} />
@@ -91,7 +92,7 @@ const App = () => {
                 <Route path="/signin" element={<Auth />} />
                 <Route path="/login" element={<Auth />} />
                 <Route path="/upload" element={<ContentUpload />} />
-                
+
                 {/* NEW: Profile setup route after email confirmation */}
                 <Route path="/profile-setup" element={<ProfileSetup />} />
                 <Route path="/profile" element={<Profile />} />
@@ -113,7 +114,8 @@ const App = () => {
                 <Route path="/content/delete/:id" element={<ContentDeletePage />} />
                 <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
                 <Route path="/content-search" element={<ContentSearch />} />
-                
+
+                {/* Catch-all route should be last */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </PageTransition>

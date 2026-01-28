@@ -602,7 +602,7 @@ const Cart = () => {
                     )}
                   </button>
 
-                  <p className="text-xs text-muted-foreground mt-4 text-center">
+                  <p className="text-xs text-muted-foreground mt-4 text-center">c
                     Secure checkout powered by M-Pesa
                   </p>
                 </div>

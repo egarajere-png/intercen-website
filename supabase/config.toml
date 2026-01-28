@@ -190,7 +190,7 @@ entrypoint = "./functions/cart-validate/index.ts"
 
 [functions.checkout-initiate]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/checkout-initiate/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -198,3 +198,58 @@ entrypoint = "./functions/checkout-initiate/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/checkout-initiate/*.html" ]
+
+[functions.checkout-process-payment]
+enabled = true
+verify_jwt = false
+import_map = "./functions/checkout-process-payment/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/checkout-process-payment/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/checkout-process-payment/*.html" ]
+
+[functions.paystack-webhook]
+enabled = true
+verify_jwt = false
+import_map = "./functions/paystack-webhook/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/paystack-webhook/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/paystack-webhook/*.html" ]
+
+[functions.paystack-callback]
+enabled = true
+verify_jwt = false
+import_map = "./functions/paystack-callback/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/paystack-callback/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/paystack-callback/*.html" ]
+
+[functions.paystack-verify-payment]
+enabled = true
+verify_jwt = false
+import_map = "./functions/paystack-verify-payment/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/paystack-verify-payment/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/paystack-verify-payment/*.html" ]
+
+[functions.reserve_stock]
+enabled = true
+verify_jwt = true
+import_map = "./functions/reserve_stock/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/reserve_stock/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/reserve_stock/*.html" ]
