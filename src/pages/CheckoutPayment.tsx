@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShoppingBag, CheckCircle, CreditCard, Package, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 
 interface OrderDetails {
