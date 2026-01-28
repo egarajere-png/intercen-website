@@ -18,7 +18,7 @@ export const PageTransition = ({ children }: { children: React.ReactNode }) => {
       setShowContent(true);
       // Scroll to top after transition
       window.scrollTo({ top: 0, behavior: 'instant' });
-    }, 3000);
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [location.pathname]);
