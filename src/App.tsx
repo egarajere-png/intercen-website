@@ -21,9 +21,15 @@ import ContentManagement from "./pages/ContentManagement";
 import ContentViewPage from "./pages/ContentViewPage";
 import NotFound from "./pages/NotFound";
 import CheckoutPayment from "./pages/CheckoutPayment";
+import PaymentSuccess from "./pages/PaymentSuccess";
+import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
-import ContentPublishButton from "./components/contents/ContentPublishButton";
+import { ContentPublishButton } from "@/components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
+
+
+
+
 import ContentDeleteConfirmationPage from "./pages/ContentDeleteConfirmationPage";
 import ContentSearch from "./pages/ContentSearch";
 
@@ -86,6 +92,7 @@ const App = () => {
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
                 <Route path="/publish" element={<PublishWithUs />} />
                 <Route path="/services" element={<ProductsServices />} />
                 <Route path="/auth" element={<Auth />} />

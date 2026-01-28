@@ -28,33 +28,61 @@ const ROLES = [
 ];
 
 const ProfilePage: React.FC = () => {
-    // State for user's uploaded content
-    const [userContents, setUserContents] = useState<any[]>([]);
-    const [showContentList, setShowContentList] = useState(false);
-    const [loadingContent, setLoadingContent] = useState(false);
-    // Load user's uploaded content
-    const fetchUserContents = async () => {
-      if (!user?.id) return;
-      setLoadingContent(true);
-      try {
-        // Use correct field 'uploaded_by' as per schema
-        const { data, error } = await supabase
-          .from('content')
-          .select('*')
-          .eq('uploaded_by', user.id)
-          .order('created_at', { ascending: false });
-        if (error) throw error;
-        setUserContents(data || []);
-      } catch (err) {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to load content',
-          description: 'Could not fetch your uploaded content.',
-        });
-      } finally {
-        setLoadingContent(false);
-      }
-    };
+  // State for user's uploaded content
+  const [userContents, setUserContents] = useState<any[]>([]);
+  const [showContentList, setShowContentList] = useState(false);
+  const [loadingContent, setLoadingContent] = useState(false);
+  // State for user's orders
+  const [orders, setOrders] = useState<any[]>([]);
+  const [showOrders, setShowOrders] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  // Load user's uploaded content
+  const fetchUserContents = async () => {
+    if (!user?.id) return;
+    setLoadingContent(true);
+    try {
+      // Use correct field 'uploaded_by' as per schema
+      const { data, error } = await supabase
+        .from('content')
+        .select('*')
+        .eq('uploaded_by', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setUserContents(data || []);
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load content',
+        description: 'Could not fetch your uploaded content.',
+      });
+    } finally {
+      setLoadingContent(false);
+    }
+  };
+
+  // Fetch user's orders
+  const fetchUserOrders = async () => {
+    if (!user?.id) return;
+    setLoadingOrders(true);
+    try {
+      // Fetch orders for the user, including order items and content info
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`*, order_items:order_items(*, content:content(*))`)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setOrders(data || []);
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to load orders',
+        description: 'Could not fetch your orders.',
+      });
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
   const [profile, setProfile] = useState<any>(null);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +148,14 @@ const ProfilePage: React.FC = () => {
     loadProfile();
     // eslint-disable-next-line
   }, []);
+
+  // Fetch orders when user opens the orders modal/section
+  useEffect(() => {
+    if (showOrders && user?.id) {
+      fetchUserOrders();
+    }
+    // eslint-disable-next-line
+  }, [showOrders, user?.id]);
 
   // Cleanup avatar preview
   useEffect(() => {
@@ -301,8 +337,8 @@ const ProfilePage: React.FC = () => {
     <>
       <Header />
       <div className="container py-12 max-w-2xl mx-auto">
-        {/* Uploaded Content Button at the Top */}
-        <div className="mb-8 flex items-center justify-end">
+        {/* Top action buttons */}
+        <div className="mb-8 flex items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -311,10 +347,78 @@ const ProfilePage: React.FC = () => {
           >
             View Uploaded Content
           </Button>
+          <Button
+            type="button"
+            variant="default"
+            onClick={() => setShowOrders(true)}
+          >
+            My Orders
+          </Button>
         </div>
         <h1 className="headline-1 mb-6">My Profile</h1>
         <Card className="p-6 flex flex-col gap-4">
           <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Orders Modal/Section */}
+                    {showOrders && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                        <div className="bg-white dark:bg-card rounded-lg shadow-lg max-w-2xl w-full p-6 relative">
+                          <button
+                            className="absolute top-4 right-4 text-muted-foreground hover:text-primary"
+                            onClick={() => setShowOrders(false)}
+                            aria-label="Close"
+                          >
+                            ×
+                          </button>
+                          <h2 className="text-xl font-bold mb-4 text-foreground">My Orders</h2>
+                          {loadingOrders ? (
+                            <div className="py-8 text-center text-muted-foreground">Loading orders...</div>
+                          ) : orders.length === 0 ? (
+                            <div className="py-8 text-center text-muted-foreground">You have not placed any orders yet.</div>
+                          ) : (
+                            <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+                              {orders.map((order: any) => (
+                                <div key={order.id} className="border rounded-lg p-4 bg-muted/30">
+                                  <div className="flex flex-wrap items-center justify-between mb-2">
+                                    <div className="font-semibold text-foreground">Order #{order.order_number}</div>
+                                    <div className="text-xs text-muted-foreground">{new Date(order.created_at).toLocaleString()}</div>
+                                  </div>
+                                  <div className="flex flex-wrap gap-4 text-sm mb-2">
+                                    <div>Status: <span className="font-medium text-foreground">{order.status}</span></div>
+                                    <div>Payment: <span className={order.payment_status === 'paid' ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>{order.payment_status}</span></div>
+                                    <div>Total: <span className="font-medium">Ksh {order.total_price}</span></div>
+                                  </div>
+                                  <div className="mt-2">
+                                    <div className="font-semibold mb-1">Items:</div>
+                                    <ul className="space-y-2">
+                                      {(order.order_items || []).map((item: any) => (
+                                        <li key={item.id} className="flex flex-col md:flex-row md:items-center md:gap-4 border-b last:border-b-0 pb-2 last:pb-0">
+                                          <span className="font-medium text-foreground">{item.content?.title || 'Untitled Content'}</span>
+                                          <span className="text-xs text-muted-foreground">Qty: {item.quantity || 1}</span>
+                                          {/* Only show access button if payment_status is 'paid' */}
+                                          {order.payment_status === 'paid' ? (
+                                            <Button
+                                              type="button"
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => item.content?.id && navigate(`/content/${item.content.id}`)}
+                                              className="ml-auto mt-2 md:mt-0"
+                                            >
+                                              Access Content
+                                            </Button>
+                                          ) : (
+                                            <span className="ml-auto mt-2 md:mt-0 text-xs text-muted-foreground">Pay to access</span>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
             {/* Email (read-only) */}
             <div className="space-y-1">
               <label htmlFor="email" className="font-semibold">Email</label>

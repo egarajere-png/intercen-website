@@ -368,7 +368,7 @@ const CheckoutPayment = () => {
                     ) : (
                       <>
                         <CreditCard className="h-5 w-5" />
-                        Pay with Paystack
+                        PAY
                       </>
                     )}
                   </button>
@@ -386,7 +386,7 @@ const CheckoutPayment = () => {
                 </p>
 
                 {/* Payment Methods */}
-                <div className="mt-6 pt-6 border-t">
+                {/* <div className="mt-6 pt-6 border-t">
                   <p className="text-sm text-muted-foreground text-center mb-3">
                     We accept
                   </p>
@@ -404,14 +404,14 @@ const CheckoutPayment = () => {
                       Mobile Money
                     </div>
                   </div>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
 
           {/* Security Notice */}
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
+          {/* <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4"> */}
+            {/* <div className="flex items-start gap-3">
               <CheckCircle className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-semibold text-blue-900 mb-1">Secure Payment</h3>
@@ -420,8 +420,8 @@ const CheckoutPayment = () => {
                   All transactions are processed through Paystack's secure payment gateway.
                 </p>
               </div>
-            </div>
-          </div>
+            </div> */}
+          {/* </div> */}
         </div>
       </div>
     </Layout>
