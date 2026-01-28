@@ -50,7 +50,7 @@ export function ContentPublishButton({
         return;
       }
 
-      const supabaseUrl = supabase.supabaseUrl;
+      const supabaseUrl = 'https://nnljrawwhibazudjudht.supabase.co';
       
       const response = await fetch(`${supabaseUrl}/functions/v1/content-publish`, {
         method: 'POST',

@@ -176,12 +176,13 @@ serve(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
-    console.error("Autocomplete error:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Autocomplete error:", err);
     
     return new Response(
       JSON.stringify({
-        error: error.message || "An error occurred during autocomplete",
+        error: err.message || "An error occurred during autocomplete",
         suggestions: [],
         query: "",
         total_suggestions: 0,
@@ -215,7 +216,7 @@ async function getTitleSuggestions(
       return [];
     }
 
-    return (data || []).map((item) => ({
+    return (data || []).map((item: { id: string; title: string; author?: string; content_type?: string; cover_image_url?: string; price?: string; average_rating?: string }) => ({
       type: 'title' as const,
       value: item.title,
       author: item.author,
@@ -441,7 +442,7 @@ async function getTrendingTagsDirect(
         slug: tag.slug,
         usage_count: tag.content_tags?.length || 0,
       }))
-      .sort((a, b) => b.usage_count - a.usage_count)
+      .sort((a: TrendingTag, b: TrendingTag) => b.usage_count - a.usage_count)
       .slice(0, limit);
   } catch (error) {
     console.error("Error in direct trending tags:", error);
@@ -680,9 +681,9 @@ async function getDefaultSuggestions(
           slug: tag.slug,
           usage_count: tag.content_tags?.length || 0,
         }))
-        .sort((a, b) => b.usage_count - a.usage_count)
+        .sort((a: TrendingTag, b: TrendingTag) => b.usage_count - a.usage_count)
         .slice(0, 3)
-        .forEach((tag) => suggestions.push(tag));
+        .forEach((tag: TrendingTag) => suggestions.push(tag));
     }
 
     return suggestions.slice(0, limit);

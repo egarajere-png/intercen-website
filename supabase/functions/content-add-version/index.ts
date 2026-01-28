@@ -1,6 +1,6 @@
 // supabase/functions/content-add-version/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { multiParser } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
+import { multiParser, FormFile } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -95,7 +95,13 @@ const getStorageBucket = (contentType: string, mimeType: string): string => {
   return 'documets'
 }
 
-Deno.serve(async (req) => {
+// Helper to get a single FormFile from possibly array
+const getSingleFile = (file: FormFile | FormFile[] | undefined): FormFile | undefined => {
+  if (!file) return undefined
+  return Array.isArray(file) ? file[0] : file
+}
+
+Deno.serve(async (req): Promise<Response> => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
@@ -142,11 +148,12 @@ Deno.serve(async (req) => {
     let form
     try {
       form = await multiParser(req)
-    } catch (e) {
-      console.error('Parse error:', e.message)
+    } catch (e: unknown) {
+      const parseErr = e as Error
+      console.error('Parse error:', parseErr.message)
       return new Response(JSON.stringify({ 
         error: 'Failed to parse form', 
-        details: e.message 
+        details: parseErr.message 
       }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -160,7 +167,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const newFile = form.files.new_file
+    const newFile = getSingleFile(form.files.new_file)
     const f = form.fields
 
     const content_id = (f.content_id as string)?.trim()
@@ -226,13 +233,14 @@ Deno.serve(async (req) => {
 
     // Validate new file
     const fileExt = newFile.filename.split('.').pop()?.toLowerCase() || ''
-    const isValidMime = newFile.type && ALLOWED_MIMES.includes(newFile.type)
+    const fileMimeType = (newFile as any).contentType || (newFile as any).type || ''
+    const isValidMime = fileMimeType && ALLOWED_MIMES.includes(fileMimeType)
     const isValidExt = validExtensions.includes(fileExt)
 
     if (!isValidMime && !isValidExt) {
       return new Response(JSON.stringify({
         error: 'Invalid file type',
-        received_type: newFile.type || 'undefined',
+        received_type: fileMimeType || 'undefined',
         received_extension: fileExt,
       }), {
         status: 400,
@@ -240,10 +248,11 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (newFile.length > MAX_FILE_SIZE) {
+    const fileSize = newFile.content.length
+    if (fileSize > MAX_FILE_SIZE) {
       return new Response(JSON.stringify({
         error: 'File too large',
-        size: `${(newFile.length / 1024 / 1024).toFixed(2)}MB`,
+        size: `${(fileSize / 1024 / 1024).toFixed(2)}MB`,
         limit: '100MB'
       }), {
         status: 400,
@@ -262,9 +271,9 @@ Deno.serve(async (req) => {
 
     // Upload new file
     const format = getFormatFromFilename(newFile.filename)
-    const storageBucket = getStorageBucket(content.content_type, newFile.type || '')
+    const storageBucket = getStorageBucket(content.content_type, fileMimeType)
 
-    let effectiveMime = newFile.type
+    let effectiveMime = fileMimeType
     if (!effectiveMime || !ALLOWED_MIMES.includes(effectiveMime)) {
       effectiveMime = mimeMap[fileExt] || 'application/octet-stream'
     }
@@ -342,7 +351,7 @@ Deno.serve(async (req) => {
       .update({
         version: nextVersion,
         file_url: new_file_url,
-        file_size_bytes: newFile.length,
+        file_size_bytes: fileSize,
         format: format,
         updated_at: new Date().toISOString(),
       })
@@ -368,7 +377,7 @@ Deno.serve(async (req) => {
         content_id: content_id,
         version_number: nextVersion,
         file_url: new_file_url,
-        file_size_bytes: newFile.length,
+        file_size_bytes: fileSize,
         format: format,
         change_summary: change_summary,
         changed_by: user.id,
@@ -392,7 +401,7 @@ Deno.serve(async (req) => {
         metadata: {
           previous_version: content.version,
           new_version: nextVersion,
-          file_size: `${(newFile.length / 1024 / 1024).toFixed(2)}MB`,
+          file_size: `${(fileSize / 1024 / 1024).toFixed(2)}MB`,
           format: format,
           bucket: storageBucket,
         }
@@ -403,17 +412,18 @@ Deno.serve(async (req) => {
       }
     )
 
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', error.constructor?.name || 'Unknown')
-    console.error('Message:', error.message || 'No message')
-    console.error('Stack:', error.stack || 'No stack')
+    console.error('Type:', err.constructor?.name || 'Unknown')
+    console.error('Message:', err.message || 'No message')
+    console.error('Stack:', err.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: error.message || 'Unknown error',
-        type: error.constructor?.name || 'Error'
+        message: err.message || 'Unknown error',
+        type: err.constructor?.name || 'Error'
       }),
       {
         status: 500,
