@@ -10,7 +10,7 @@ const Index = () => {
   return (
     <Layout>
       <HeroSection />
-      <FeaturedBooks />
+      {/* <FeaturedBooks /> */}
       <CategorySection />
       <PromoBanner />
       <BestsellerSection />

@@ -1,3 +1,8 @@
+/**
+ * Books/Content Library Page
+ * Displays content with search, filtering, and add-to-cart functionality
+ */
+
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, Filter, X } from 'lucide-react';
@@ -24,6 +29,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { categories } from '@/data/mockBooks';
 import { Content } from '@/types/content.types';
 import { supabase } from '@/lib/SupabaseClient';
+import { useToast } from '@/hooks/use-toast';
+import { useCart } from '@/contexts/CartContext';
 
 // All content types from the database
 const CONTENT_TYPES = [
@@ -34,10 +41,6 @@ const CONTENT_TYPES = [
   { value: 'report', label: 'Report' },
   { value: 'manual', label: 'Manual' },
   { value: 'guide', label: 'Guide' },
-  { value: 'manuscript', label: 'Manuscript' },
-  { value: 'article', label: 'Article' },
-  { value: 'thesis', label: 'Thesis' },
-  { value: 'dissertation', label: 'Dissertation' },
 ];
 
 const Books = () => {
@@ -53,6 +56,9 @@ const Books = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [addingToCart, setAddingToCart] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { addToCart: addToCartContext } = useCart();
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -78,15 +84,15 @@ const Books = () => {
         if (priceRange === 'free') {
           filters.is_free = true;
         } else if (priceRange === 'under-15') {
-          filters.price_max = 15;
+          filters.price_max = 2000;
         } else if (priceRange === '15-25') {
-          filters.price_min = 15;
-          filters.price_max = 25;
+          filters.price_min = 2000;
+          filters.price_max = 3500;
         } else if (priceRange === '25-50') {
-          filters.price_min = 25;
-          filters.price_max = 50;
+          filters.price_min = 3500;
+          filters.price_max = 7000;
         } else if (priceRange === 'over-50') {
-          filters.price_min = 50;
+          filters.price_min = 7000;
         }
       }
 
@@ -175,13 +181,41 @@ const Books = () => {
     fetchContent();
   }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page]);
 
+  const handleAddToCart = async (contentId: string, quantity: number = 1) => {
+    try {
+      setAddingToCart(contentId);
+
+      // Find the content item to pass as a book object
+      const contentItem = content.find(c => c.id === contentId);
+      if (!contentItem) {
+        throw new Error('Content not found');
+      }
+
+      // Create a book object for CartContext
+      const book = {
+        id: contentItem.id,
+        title: contentItem.title || 'Untitled',
+        author: contentItem.author,
+        price: contentItem.price ?? 0,
+      };
+
+      // Use CartContext which handles edge function calls
+      await addToCartContext(book, quantity);
+    } catch (error: any) {
+      console.error('Error adding to cart:', error);
+      // Error handling is done in CartContext
+    } finally {
+      setAddingToCart(null);
+    }
+  };
+
   const toggleCategory = (category: string) => {
     setSelectedCategories(prev =>
       prev.includes(category)
         ? prev.filter(c => c !== category)
         : [...prev, category]
     );
-    setPage(1); // Reset to first page when filter changes
+    setPage(1);
   };
 
   const toggleContentType = (contentType: string) => {
@@ -209,7 +243,6 @@ const Books = () => {
     visibility !== 'all' || 
     searchQuery !== '';
 
-  // No frontend filtering/sorting; all handled by edge function
   const sortedContent = content;
 
   const FilterSidebar = () => (
@@ -526,7 +559,6 @@ const Books = () => {
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                   {sortedContent.map((item, index) => {
-                    // Map Content to Book shape for BookCard with accurate data from upload/update structure
                     const book = {
                       id: item.id,
                       title: item.title || 'Untitled',
@@ -535,7 +567,7 @@ const Books = () => {
                       price: item.price ?? 0,
                       originalPrice: undefined,
                       description: item.description || '',
-                      synopsis: item.description || '', // Use description as synopsis fallback
+                      synopsis: item.description || '',
                       category: item.category_id || '',
                       coverImage: item.cover_image_url || '/placeholder-book-cover.png',
                       backCoverImage: undefined,
@@ -549,7 +581,6 @@ const Books = () => {
                       language: item.language || 'en',
                       featured: item.is_featured ?? false,
                       bestseller: item.is_bestseller ?? false,
-                      // Additional fields from content structure
                       format: item.format || 'pdf',
                       version: item.version || '1.0',
                       contentType: item.content_type || 'book',
@@ -571,7 +602,11 @@ const Books = () => {
                         className="animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <BookCard book={book} />
+                        <BookCard 
+                          book={book} 
+                          onAddToCart={handleAddToCart}
+                          isAddingToCart={addingToCart === book.id}
+                        />
                       </div>
                     );
                   })}
@@ -594,7 +629,6 @@ const Books = () => {
                       </Button>
                       
                       <div className="flex items-center gap-1">
-                        {/* Show first page */}
                         {page > 3 && (
                           <>
                             <Button
@@ -611,7 +645,6 @@ const Books = () => {
                           </>
                         )}
                         
-                        {/* Show pages around current page */}
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                           const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
                           if (pageNum <= totalPages) {
@@ -632,7 +665,6 @@ const Books = () => {
                           return null;
                         })}
                         
-                        {/* Show last page */}
                         {page < totalPages - 2 && (
                           <>
                             {page < totalPages - 3 && <span className="px-2">...</span>}
