@@ -20,6 +20,7 @@ import ContentManagement from "./pages/ContentManagement";
 import ContentViewPage from "./pages/ContentViewPage";
 
 import NotFound from "./pages/NotFound";
+import CheckoutPayment from "./pages/CheckoutPayment";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
 import ContentPublishButton from "./components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
@@ -82,6 +83,7 @@ const App = () => {
               <Route path="/books" element={<Books />} />
               <Route path="/books/:id" element={<BookDetail />} />
               <Route path="/cart" element={<Cart />} />
+              <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
               <Route path="/about" element={<About />} />
               <Route path="/publish" element={<PublishWithUs />} />
               <Route path="/services" element={<ProductsServices />} />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, Plus, Minus, Trash2, User, MapPin, Truck, Package, CheckCircle, X } from "lucide-react";
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 
 // Types
@@ -31,6 +31,7 @@ const Cart = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Customer Info
   const [customerInfo, setCustomerInfo] = useState({
@@ -189,22 +190,66 @@ const Cart = () => {
     }
 
     try {
+      setIsProcessing(true);
+
+      // Get the current session with access token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        alert('Session expired. Please log in again.');
+        navigate('/auth');
+        return;
+      }
+
+      // Prepare checkout data
+      const checkoutData = {
+        customer_info: {
+          fullName: customerInfo.fullName,
+          email: customerInfo.email || session.user.email,
+          phone: customerInfo.phone,
+        },
+        shipping_address: {
+          address: shippingAddress.address,
+          city: shippingAddress.city,
+          postalCode: shippingAddress.postalCode,
+        },
+        delivery_method: selectedDelivery,
+        discount_code: appliedDiscount?.code || undefined,
+      };
+
+      console.log('Initiating checkout with data:', checkoutData);
+
+      // Call the edge function with proper authorization
       const { data, error } = await supabase.functions.invoke('checkout-initiate', {
-        body: {
-          customer_info: customerInfo,
-          shipping_address: shippingAddress,
-          delivery_method: selectedDelivery,
-          discount_code: appliedDiscount?.code
-        }
+        body: checkoutData,
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Checkout error:', error);
+        alert(error.message || 'Failed to initiate checkout');
+        return;
+      }
 
-      // Redirect to payment
+      if (!data || !data.success) {
+        console.error('Checkout failed:', data);
+        alert(data?.error || 'Checkout failed');
+        return;
+      }
+
+      console.log('Order created successfully:', data);
+
+      // Success - redirect to payment page
+      alert(`Order created successfully! Order Number: ${data.order_number}`);
       navigate(`/checkout/payment/${data.order_id}`);
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Checkout error:', error);
-      alert('Failed to process checkout');
+      alert(error.message || 'An unexpected error occurred during checkout');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -540,13 +585,24 @@ const Cart = () => {
 
                   <button
                     onClick={handleCheckout}
-                    disabled={!user || !selectedDelivery || !deliveryReviewed}
+                    disabled={!user || !selectedDelivery || !deliveryReviewed || isProcessing}
                     className="w-full mt-6 bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary/90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                   >
-                    {!user ? 'Login to Checkout' : !selectedDelivery ? 'Select Delivery Method' : 'Proceed to Payment'}
+                    {isProcessing ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Processing...
+                      </span>
+                    ) : !user ? (
+                      'Login to Checkout'
+                    ) : !selectedDelivery ? (
+                      'Select Delivery Method'
+                    ) : (
+                      'Proceed to Payment'
+                    )}
                   </button>
 
-                  <p className="text-xs text-muted-foreground mt-4 text-center">
+                  <p className="text-xs text-muted-foreground mt-4 text-center">c
                     Secure checkout powered by M-Pesa
                   </p>
                 </div>
