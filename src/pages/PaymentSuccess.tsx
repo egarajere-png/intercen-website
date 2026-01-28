@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Loader2, CheckCircle, XCircle, AlertCircle, ArrowLeft } from 'lucide-react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 
 const PaymentCallback = () => {
