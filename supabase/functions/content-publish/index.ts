@@ -314,6 +314,11 @@ Deno.serve(async (req): Promise<Response> => {
       )
     }
 
+    // Fallback return (should never reach here)
+    return new Response(JSON.stringify({ error: 'Invalid action' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error: unknown) {
     const err = error as Error
     console.error('=== UNEXPECTED ERROR ===')
