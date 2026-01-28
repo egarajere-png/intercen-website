@@ -176,7 +176,7 @@ export default function ContentUploadPage() {
       if (form.cover) formData.append('cover_image', form.cover);
 
       // Get Supabase URL from the client
-      const supabaseUrl = supabase.supabaseUrl;
+      const supabaseUrl = 'https://nnljrawwhibazudjudht.supabase.co';
 
       // Use fetch with explicit Authorization header
       const response = await fetch(`${supabaseUrl}/functions/v1/content-upload`, {
@@ -207,7 +207,7 @@ export default function ContentUploadPage() {
         language: 'en',
         visibility: 'private',
         status: 'draft',
-        contentType: '',
+        contentType: 'book' as any,
         file: null,
         cover: null,
       });

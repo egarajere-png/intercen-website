@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { CartProvider } from "@/contexts/CartContext";
+import { PageTransition } from "@/components/layout/PageTransition";
 
 import Index from "./pages/Index";
 import Books from "./pages/Books";
@@ -97,25 +98,45 @@ const App = () => {
               <Route path="/profile" element={<Profile />} />
               <Route path="/content-management" element={<ContentManagement />} />
               <Route path="/content/:id" element={<ContentViewPage />} />
+            <PageTransition>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/books" element={<Books />} />
+                <Route path="/books/:id" element={<BookDetail />} />
+                <Route path="/cart" element={<Cart />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/publish" element={<PublishWithUs />} />
+                <Route path="/services" element={<ProductsServices />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/signin" element={<Auth />} />
+                <Route path="/login" element={<Auth />} />
+                <Route path="/upload" element={<ContentUpload />} />
+                
+                {/* NEW: Profile setup route after email confirmation */}
+                <Route path="/profile-setup" element={<ProfileSetup />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/content-management" element={<ContentManagement />} />
+                <Route path="/content/:id" element={<ContentViewPage />} />
 
-              <Route
-                path="/reset-password"
-                element={
-                  <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                    <PasswordChange />
-                  </Suspense>
-                }
-              />
+                <Route
+                  path="/reset-password"
+                  element={
+                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                      <PasswordChange />
+                    </Suspense>
+                  }
+                />
 
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="/content/update/:id" element={<ContentUpdatePage />} />
-              <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
-              <Route path="/content/delete/:id" element={<ContentDeletePage />} />
-              <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
-              <Route path="/content-search" element={<ContentSearch />} />
-              
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="/content/update/:id" element={<ContentUpdatePage />} />
+                <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
+                <Route path="/content/delete/:id" element={<ContentDeletePage />} />
+                <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
+                <Route path="/content-search" element={<ContentSearch />} />
+                
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </PageTransition>
           </BrowserRouter>
         </CartProvider>
       </TooltipProvider>

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Star, Truck } from 'lucide-react';
+import { ArrowRight, BookOpen, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import publishersTeam from '@/assets/publishers-team.jpg';
 
 export const HeroSection = () => {
   return (
@@ -67,32 +68,27 @@ export const HeroSection = () => {
             </div>
           </div>
 
-          {/* Hero Image */}
+          {/* Hero Image - Publishers Team */}
           <div className="relative hidden lg:block">
             <div className="relative z-10">
-              {/* Main Book Stack */}
-              <div className="relative w-full max-w-md mx-auto">
-                {/* Background Book */}
-                <div className="absolute -left-8 top-8 w-48 h-72 bg-secondary/20 rounded-xl transform -rotate-12 shadow-elegant" />
-                <div className="absolute -right-8 top-4 w-48 h-72 bg-primary/20 rounded-xl transform rotate-12 shadow-elegant" />
+              {/* Main Image Container */}
+              <div className="relative w-full max-w-lg mx-auto">
+                {/* Decorative background elements */}
+                <div className="absolute -left-6 -top-6 w-full h-full bg-primary/20 rounded-2xl transform -rotate-3" />
+                <div className="absolute -right-6 -bottom-6 w-full h-full bg-secondary/20 rounded-2xl transform rotate-3" />
                 
-                {/* Main Featured Book */}
-                <div className="relative bg-card rounded-2xl shadow-elevated p-6 transform hover:scale-105 transition-transform duration-500 hover-shine">
-                  <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted mb-4">
-                    <img
-                      src="https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400&h=600&fit=crop"
-                      alt="Featured Book"
-                      className="img-cover hero-scale"
-                    />
-                  </div>
-                  <h3 className="font-forum font-normal text-xl mb-1">Featured Title</h3>
-                  <p className="text-muted-foreground text-sm mb-2">Published by Intercen</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xl font-bold text-primary">KES 1,500</span>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-primary text-primary" />
-                      <span className="text-sm font-medium">4.8</span>
-                    </div>
+                {/* Main Image */}
+                <div className="relative bg-card rounded-2xl shadow-elevated overflow-hidden transform hover:scale-[1.02] transition-transform duration-500">
+                  <img
+                    src={publishersTeam}
+                    alt="Intercen Books Publishing Team"
+                    className="w-full h-auto object-cover aspect-[4/5]"
+                  />
+                  
+                  {/* Overlay with text */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-6">
+                    <h3 className="font-forum text-xl text-white mb-1">Our Publishing Team</h3>
+                    <p className="text-white/80 text-sm">Dedicated to bringing African stories to the world</p>
                   </div>
                 </div>
               </div>
