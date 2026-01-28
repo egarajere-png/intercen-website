@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShoppingBag, Plus, Minus, Trash2, User, MapPin, Truck, Package, CheckCircle, X } from "lucide-react";
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 
 // Types
