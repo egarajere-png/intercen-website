@@ -1,3 +1,4 @@
+// File intentionally left blank after removing all mockBooks usage from codebase.
 import { Book, Category } from "@/types/book";
 
 

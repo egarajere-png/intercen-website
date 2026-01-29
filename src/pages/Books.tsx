@@ -26,7 +26,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
-import { categories } from '@/data/mockBooks';
+// ...removed categories import...
 import { Content } from '@/types/content.types';
 import { supabase } from '@/lib/SupabaseClient';
 import { useToast } from '@/hooks/use-toast';
