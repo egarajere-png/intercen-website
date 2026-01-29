@@ -144,7 +144,6 @@ const BookDetail = () => {
         const enrichedBook: ContentItem = {
           ...contentData,
           category,
-          original_price: contentData.price > 0 ? contentData.price * 1.25 : undefined, // 20% discount shown
         };
 
         setBook(enrichedBook);
@@ -272,10 +271,7 @@ const BookDetail = () => {
     }
   };
 
-  // Calculate discount percentage
-  const discountPercent = book.original_price 
-    ? Math.round((1 - book.price / book.original_price) * 100)
-    : 0;
+
 
   return (
     <Layout>
@@ -333,11 +329,7 @@ const BookDetail = () => {
                   New Arrival
                 </Badge>
               )}
-              {book.original_price && discountPercent > 0 && (
-                <Badge className="absolute top-4 right-4 bg-primary text-primary-foreground">
-                  {discountPercent}% Off
-                </Badge>
-              )}
+
               {book.is_free && (
                 <Badge className="absolute bottom-4 left-4 bg-green-500 text-white">
                   Free
@@ -420,11 +412,7 @@ const BookDetail = () => {
                   <span className="text-4xl font-bold text-primary">
                     KSH {book.price.toFixed(2)}
                   </span>
-                  {book.original_price && book.original_price > book.price && (
-                    <span className="text-xl text-muted-foreground line-through">
-                      KSH {book.original_price.toFixed(2)}
-                    </span>
-                  )}
+
                 </>
               )}
             </div>
@@ -704,7 +692,7 @@ const BookDetail = () => {
                     title: relatedBook.title,
                     author: relatedBook.author || 'Unknown Author',
                     price: relatedBook.price,
-                    originalPrice: relatedBook.original_price,
+
                     rating: relatedBook.average_rating,
                     reviewCount: relatedBook.total_reviews,
                     image: relatedBook.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
