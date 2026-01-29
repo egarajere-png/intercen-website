@@ -2,11 +2,9 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, TrendingUp } from 'lucide-react';
 import { BookCard } from '@/components/books/BookCard';
 import { Button } from '@/components/ui/button';
-// ...removed getBestsellers import...
+import { mockBooks as bestsellers } from '@/data/mockBooks';
 
 export const BestsellerSection = () => {
-  // ...removed usage of getBestsellers...
-
   return (
     <section className="py-16 md:py-24">
       <div className="container">

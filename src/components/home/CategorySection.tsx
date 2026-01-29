@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-// ...removed categories import...
+import { categories } from '@/data/mockBooks';
 
 const categoryImages: Record<string, string> = {
   fiction: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=400&h=300&fit=crop",
