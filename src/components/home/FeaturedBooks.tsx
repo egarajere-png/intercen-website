@@ -2,10 +2,10 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { BookCard } from '@/components/books/BookCard';
 import { Button } from '@/components/ui/button';
-import { getFeaturedBooks } from '@/data/mockBooks';
+// ...removed getFeaturedBooks import...
 
 export const FeaturedBooks = () => {
-  const featuredBooks = getFeaturedBooks();
+  // ...removed usage of getFeaturedBooks...
 
   return (
     <section className="py-16 md:py-24">

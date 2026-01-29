@@ -178,4 +178,7 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
       </div>
     </Link>
   );
+
 };
+
+export default BookCard;
