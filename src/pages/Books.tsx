@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, Filter, X } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
 import { BookCard } from '@/components/books/BookCard';
@@ -26,11 +26,23 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
-import { categories } from '@/data/mockBooks';
+// import { categories } from '@/data/mockBooks';
 import { Content } from '@/types/content.types';
 import { supabase } from '@/lib/SupabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/contexts/CartContext';
+
+// Mock categories - replace with your actual categories data
+const categories = [
+  { id: '1', slug: 'fiction', name: 'Fiction', bookCount: 245 },
+  { id: '2', slug: 'non-fiction', name: 'Non-Fiction', bookCount: 189 },
+  { id: '3', slug: 'mystery-thriller', name: 'Mystery & Thriller', bookCount: 156 },
+  { id: '4', slug: 'romance', name: 'Romance', bookCount: 203 },
+  { id: '5', slug: 'science-fiction', name: 'Science Fiction', bookCount: 98 },
+  { id: '6', slug: 'biography', name: 'Biography', bookCount: 87 },
+  { id: '7', slug: 'self-help', name: 'Self-Help', bookCount: 124 },
+  { id: '8', slug: 'childrens-books', name: "Children's Books", bookCount: 176 },
+];
 
 // All content types from the database
 const CONTENT_TYPES = [
@@ -44,6 +56,7 @@ const CONTENT_TYPES = [
 ];
 
 const Books = () => {
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>([]);
@@ -57,8 +70,14 @@ const Books = () => {
   const [totalResults, setTotalResults] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
+  const [fetchTrigger, setFetchTrigger] = useState(0);
   const { toast } = useToast();
   const { addToCart: addToCartContext } = useCart();
+
+  // Force refetch when navigating back to this page
+  useEffect(() => {
+    setFetchTrigger(prev => prev + 1);
+  }, [location.pathname]);
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -179,7 +198,7 @@ const Books = () => {
     };
     
     fetchContent();
-  }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page]);
+  }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page, fetchTrigger]);
 
   const handleAddToCart = async (contentId: string, quantity: number = 1) => {
     try {
@@ -533,7 +552,10 @@ const Books = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.location.reload()}
+                  onClick={() => {
+                    setError(null);
+                    setFetchTrigger(prev => prev + 1);
+                  }}
                 >
                   Retry
                 </Button>
