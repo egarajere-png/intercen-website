@@ -13,7 +13,7 @@ const Index = () => {
       {/* <FeaturedBooks /> */}
       <CategorySection />
       <PromoBanner />
-      <BestsellerSection />
+      {/* <BestsellerSection /> */}
       
     </Layout>
   );
