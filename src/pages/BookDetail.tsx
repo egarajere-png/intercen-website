@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { useCart } from '../contexts/CartContext';
 import { toast } from 'sonner';
 import { supabase } from '../lib/SupabaseClient';
+import ReviewForm from '../components/ReviewForm';
+import ReviewList from '../components/ReviewList';
 
 // Type definition matching the actual database schema
 interface ContentItem {
@@ -669,10 +671,10 @@ const BookDetail = () => {
             </TabsContent>
 
             <TabsContent value="reviews" className="pt-6">
-              <p className="text-muted-foreground">
-                Reviews will be available soon. Sign in to be the first to leave a review!
-              </p>
-              {/* TODO: Implement reviews fetching from database */}
+              <div className="space-y-8">
+                <ReviewForm contentId={book.id} onSuccess={() => window.location.reload()} />
+                <ReviewList contentId={book.id} />
+              </div>
             </TabsContent>
           </Tabs>
         </div>

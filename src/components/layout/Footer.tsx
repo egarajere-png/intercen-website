@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import intercenLogo from '@/assets/intercen-books-logo.png';
 
 export const Footer = () => {
+  const currentYear = new Date().getFullYear();
   return (
     <footer className="bg-charcoal text-white/90">
       {/* Newsletter Section */}
@@ -132,7 +133,7 @@ export const Footer = () => {
       <div className="border-t border-white/10">
         <div className="container py-6 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-white/50 text-sm">
-            © 2024 InterCEN Books. All rights reserved.
+            © {currentYear} InterCEN Books. All rights reserved.
           </p>
           <div className="flex gap-6">
             <Link to="/privacy" className="text-white/50 hover:text-white text-sm">
