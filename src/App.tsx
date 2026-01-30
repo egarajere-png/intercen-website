@@ -26,6 +26,7 @@ import PaymentConfirmationPage from "./pages/PaymentConfirmationPage";
 import ContentUpdatePage from "./pages/ContentUpdatePage";
 import { ContentPublishButton } from "@/components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
+import ContentReviewsPage from "./pages/ContentReviewsPage";
 
 
 
