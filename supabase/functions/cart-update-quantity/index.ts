@@ -41,6 +41,11 @@ interface CartItemDetail {
   item_subtotal: number;
 }
 
+interface ContentData {
+  id: string;
+  stock_quantity: number;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -168,29 +173,12 @@ serve(async (req) => {
       );
     }
 
-    // Handle quantity <= 0: DELETE item
-    if (quantity <= 0) {
-      const { error: deleteError } = await supabaseClient
-        .from("cart_items")
-        .delete()
-        .eq("id", cart_item_id);
-
-      if (deleteError) {
-        throw deleteError;
-      }
-
-      // Update cart timestamp
-      await supabaseClient
+    // Helper function to fetch and return updated cart
+    const getUpdatedCart = async (cartId: string): Promise<Response> => {
+      const { data: updatedCart, error: fetchCartError } = await supabaseClient
         .from("carts")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", cart.id);
-
-      // Return updated cart
-      const { data: updatedCart, error: fetchCartError } =
-        await supabaseClient
-          .from("carts")
-          .select(
-            `
+        .select(
+          `
           id,
           user_id,
           created_at,
@@ -213,19 +201,22 @@ serve(async (req) => {
             )
           )
         `
-          )
-          .eq("id", cart.id)
-          .single();
+        )
+        .eq("id", cartId)
+        .single();
 
       if (fetchCartError) {
         throw fetchCartError;
       }
 
-      const cartItems = (updatedCart.items || []) as CartItemDetail[];
-      const itemsWithSubtotals = cartItems.map((item) => ({
-        ...item,
-        item_subtotal: Number(item.price) * item.quantity,
-      }));
+      const rawItems = (updatedCart.items || []) as unknown[];
+      const itemsWithSubtotals = rawItems.map((item: unknown) => {
+        const typedItem = item as { price: number; quantity: number };
+        return {
+          ...typedItem,
+          item_subtotal: Number(typedItem.price) * typedItem.quantity,
+        };
+      });
 
       const subtotal = itemsWithSubtotals.reduce(
         (sum, item) => sum + item.item_subtotal,
@@ -239,7 +230,7 @@ serve(async (req) => {
 
       const response: CartWithItems = {
         ...updatedCart,
-        items: itemsWithSubtotals,
+        items: itemsWithSubtotals as CartItemDetail[],
         subtotal: Math.round(subtotal * 100) / 100,
         total_items: totalItems,
       };
@@ -248,10 +239,35 @@ serve(async (req) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    };
+
+    // Handle quantity <= 0: DELETE item
+    if (quantity <= 0) {
+      const { error: deleteError } = await supabaseClient
+        .from("cart_items")
+        .delete()
+        .eq("id", cart_item_id);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+
+      // Update cart timestamp
+      await supabaseClient
+        .from("carts")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", cart.id);
+
+      return getUpdatedCart(cart.id);
     }
 
+    // Handle content - could be array from join
+    const contentData = Array.isArray(cartItemData.content) 
+      ? cartItemData.content[0] as ContentData
+      : cartItemData.content as ContentData;
+
     // Validate stock availability
-    const stockQuantity = cartItemData.content.stock_quantity;
+    const stockQuantity = contentData?.stock_quantity ?? 0;
     if (quantity > stockQuantity) {
       return new Response(
         JSON.stringify({
@@ -282,75 +298,15 @@ serve(async (req) => {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", cart.id);
 
-    // Return updated cart
-    const { data: updatedCart, error: fetchCartError } = await supabaseClient
-      .from("carts")
-      .select(
-        `
-        id,
-        user_id,
-        created_at,
-        updated_at,
-        items:cart_items (
-          id,
-          cart_id,
-          content_id,
-          quantity,
-          price,
-          added_at,
-          content:content (
-            id,
-            title,
-            subtitle,
-            author,
-            cover_image_url,
-            price,
-            stock_quantity
-          )
-        )
-      `
-      )
-      .eq("id", cart.id)
-      .single();
-
-    if (fetchCartError) {
-      throw fetchCartError;
-    }
-
-    const cartItems = updatedCart.items as CartItemDetail[];
-    const itemsWithSubtotals = cartItems.map((item) => ({
-      ...item,
-      item_subtotal: Number(item.price) * item.quantity,
-    }));
-
-    const subtotal = itemsWithSubtotals.reduce(
-      (sum, item) => sum + item.item_subtotal,
-      0
-    );
-
-    const totalItems = itemsWithSubtotals.reduce(
-      (sum, item) => sum + item.quantity,
-      0
-    );
-
-    const response: CartWithItems = {
-      ...updatedCart,
-      items: itemsWithSubtotals,
-      subtotal: Math.round(subtotal * 100) / 100,
-      total_items: totalItems,
-    };
-
-    return new Response(JSON.stringify(response), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Error in cart-update-quantity function:", error);
+    return getUpdatedCart(cart.id);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Error in cart-update-quantity function:", err);
 
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
-        message: error.message || "An unexpected error occurred",
+        message: err.message || "An unexpected error occurred",
       }),
       {
         status: 500,
