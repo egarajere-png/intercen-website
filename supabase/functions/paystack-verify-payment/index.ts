@@ -1,7 +1,7 @@
-// supabase/functions/paystack-verify/index.ts
-// Note: renamed to paystack-verify (shorter, clearer)
+// supabase/functions/paystack-verify-payment/index.ts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -99,8 +99,6 @@ serve(async (req) => {
       .update({
         payment_status: newPaymentStatus,
         updated_at: new Date().toISOString(),
-        // Optional: store more info
-        // payment_details: { channel: tx.channel, paid_at: tx.paid_at },
       })
       .eq('id', orderId)
       .eq('payment_reference', reference);
@@ -121,10 +119,11 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (err: any) {
-    console.error('Verification error:', err);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error('Verification error:', error);
     return new Response(
-      JSON.stringify({ success: false, error: err.message || 'Internal error' }),
+      JSON.stringify({ success: false, error: error.message || 'Internal error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

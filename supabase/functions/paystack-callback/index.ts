@@ -160,10 +160,11 @@ serve(async (req) => {
         );
     }
 
-  } catch (error) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('=== Callback Processing Failed ===', {
-      error: error.message,
-      stack: error.stack,
+      error: err.message,
+      stack: err.stack,
     });
     
     const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';

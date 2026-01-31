@@ -12,6 +12,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+interface ContentInfo {
+  id: string;
+  title: string;
+  price: number;
+  status: string;
+  is_for_sale: boolean;
+  stock_quantity: number;
+}
+
+interface CartItem {
+  id: string;
+  cart_id: string;
+  content_id: string;
+  quantity: number;
+  price: number;
+  content: ContentInfo;
+}
+
 interface ValidationError {
   cart_item_id: string;
   content_id: string;
@@ -130,21 +148,27 @@ serve(async (req) => {
     let totalItems = 0;
 
     // Validate each cart item
-    for (const item of cart.items) {
+    for (const rawItem of cart.items) {
+      // Handle the case where content might be an array from the join
+      const item = rawItem as unknown as CartItem;
+      const content = Array.isArray(rawItem.content) ? rawItem.content[0] : rawItem.content;
+      
+      if (!content) continue;
+      
       const cartPrice = Number(item.price);
-      const currentPrice = Number(item.content.price);
+      const currentPrice = Number(content.price);
       const priceChange = Math.abs(currentPrice - cartPrice);
       const priceChangePercent = (priceChange / cartPrice) * 100;
 
       // Check if content is still published
-      if (item.content.status !== "published") {
+      if (content.status !== "published") {
         errors.push({
           cart_item_id: item.id,
           content_id: item.content_id,
-          title: item.content.title,
+          title: content.title,
           error: "This item is no longer available",
           error_type:
-            item.content.status === "discontinued"
+            content.status === "discontinued"
               ? "discontinued"
               : "not_published",
         });
@@ -152,11 +176,11 @@ serve(async (req) => {
       }
 
       // Check if content is still for sale
-      if (!item.content.is_for_sale) {
+      if (!content.is_for_sale) {
         errors.push({
           cart_item_id: item.id,
           content_id: item.content_id,
-          title: item.content.title,
+          title: content.title,
           error: "This item is no longer for sale",
           error_type: "not_for_sale",
         });
@@ -164,16 +188,16 @@ serve(async (req) => {
       }
 
       // Check stock availability
-      if (item.quantity > item.content.stock_quantity) {
+      if (item.quantity > content.stock_quantity) {
         errors.push({
           cart_item_id: item.id,
           content_id: item.content_id,
-          title: item.content.title,
-          error: `Insufficient stock. Only ${item.content.stock_quantity} available`,
+          title: content.title,
+          error: `Insufficient stock. Only ${content.stock_quantity} available`,
           error_type: "out_of_stock",
           details: {
             requested_quantity: item.quantity,
-            available_quantity: item.content.stock_quantity,
+            available_quantity: content.stock_quantity,
           },
         });
         continue;
@@ -184,7 +208,7 @@ serve(async (req) => {
         errors.push({
           cart_item_id: item.id,
           content_id: item.content_id,
-          title: item.content.title,
+          title: content.title,
           error: `Price has changed significantly from ${cartPrice.toFixed(
             2
           )} to ${currentPrice.toFixed(2)} (${priceChangePercent.toFixed(
@@ -219,13 +243,14 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    console.error("Error in cart-validate function:", error);
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Error in cart-validate function:", err);
 
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
-        message: error.message || "An unexpected error occurred",
+        message: err.message || "An unexpected error occurred",
       }),
       {
         status: 500,
@@ -233,4 +258,4 @@ serve(async (req) => {
       }
     );
   }
-}); 
+});

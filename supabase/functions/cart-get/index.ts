@@ -94,7 +94,7 @@ serve(async (req) => {
 
     // Calculate summary
     const items = cart.cart_items || []
-    const subtotal = items.reduce((sum: number, item: any) =>
+    const subtotal = items.reduce((sum: number, item: { price: number; quantity: number }) =>
       sum + (item.price * item.quantity), 0
     )
 
@@ -113,10 +113,11 @@ serve(async (req) => {
       }
     )
 
-  } catch (error) {
-    console.error('Error in cart-get:', error)
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('Error in cart-get:', err)
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: 'Internal server error', details: err.message }),
       {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
