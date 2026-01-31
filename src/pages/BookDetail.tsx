@@ -26,6 +26,7 @@ interface ContentItem {
   category_id?: string | null;
   language: string;
   cover_image_url?: string | null;
+  backpage_image_url?: string | null;
   file_url?: string | null;
   file_size_bytes?: number | null;
   page_count?: number | null;
@@ -33,7 +34,7 @@ interface ContentItem {
   is_free: boolean;
   is_for_sale: boolean;
   stock_quantity: number;
-  quantity: number; // Additional field in schema
+  quantity: number;
   isbn?: string | null;
   
   // Feature flags from actual schema
@@ -223,10 +224,11 @@ const BookDetail = () => {
     );
   }
 
-  // Generate image array - use cover_image_url or placeholder
-  const images = book.cover_image_url 
-    ? [book.cover_image_url]
-    : ["https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400"];
+  // Generate image array - only include backpage if it exists and is different from cover
+  const images = [
+    book.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
+    ...(book.backpage_image_url && book.backpage_image_url !== book.cover_image_url ? [book.backpage_image_url] : [])
+  ];
 
   const handleAddToCart = () => {
     if (book.stock_quantity === 0) {
@@ -273,8 +275,6 @@ const BookDetail = () => {
     }
   };
 
-
-
   return (
     <Layout>
       <div className="container mx-auto px-2 sm:px-4 py-6 sm:py-8">
@@ -310,12 +310,21 @@ const BookDetail = () => {
             <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted shadow-card">
               <img
                 src={images[selectedImage]}
-                alt={book.title}
+                alt={selectedImage === 0 ? book.title : `${book.title} - Back Page`}
                 className="w-full h-full object-cover"
                 onError={(e) => {
                   e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
                 }}
               />
+              
+              {/* Label for back page */}
+              {selectedImage === 1 && book.backpage_image_url && (
+                <div className="absolute top-4 right-4 bg-white/90 text-xs font-semibold px-3 py-1 rounded-full shadow text-gray-700">
+                  Back Page
+                </div>
+              )}
+
+              {/* Badges */}
               {book.is_bestseller && (
                 <Badge className="absolute top-4 left-4 bg-secondary text-secondary-foreground">
                   Bestseller
@@ -331,7 +340,6 @@ const BookDetail = () => {
                   New Arrival
                 </Badge>
               )}
-
               {book.is_free && (
                 <Badge className="absolute bottom-4 left-4 bg-green-500 text-white">
                   Free
@@ -349,15 +357,21 @@ const BookDetail = () => {
                     className={`relative w-20 h-28 rounded-lg overflow-hidden border-2 transition-all ${
                       selectedImage === idx ? 'border-primary' : 'border-transparent'
                     }`}
+                    aria-label={idx === 0 ? 'Cover Image' : 'Back Page Image'}
                   >
                     <img 
                       src={img} 
-                      alt="" 
+                      alt={idx === 0 ? book.title : `${book.title} - Back Page`}
                       className="w-full h-full object-cover"
                       onError={(e) => {
                         e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
                       }}
                     />
+                    {idx === 1 && book.backpage_image_url && (
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5">
+                        Back
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -410,61 +424,25 @@ const BookDetail = () => {
               {book.is_free ? (
                 <span className="text-4xl font-bold text-green-600">FREE</span>
               ) : (
-                <>
-                  <span className="text-4xl font-bold text-primary">
-                    KSH {book.price.toFixed(2)}
-                  </span>
-
-                </>
+                <span className="text-4xl font-bold text-primary">
+                  KSH {book.price.toFixed(2)}
+                </span>
               )}
             </div>
 
-            {/* Description */}
-            {book.description && (
-              <p className="text-muted-foreground leading-relaxed">
-                {book.description}
-              </p>
-            )}
-
-            {/* Stock Status */}
-            <div className="flex items-center gap-2">
-              {book.stock_quantity > 0 ? (
-                <>
-                  <div className="h-2 w-2 rounded-full bg-green-500" />
-                  <span className="text-sm text-green-600 font-medium">
-                    In Stock ({book.stock_quantity} available)
-                  </span>
-                </>
-              ) : (
-                <>
-                  <div className="h-2 w-2 rounded-full bg-destructive" />
-                  <span className="text-sm text-destructive font-medium">Out of Stock</span>
-                </>
+            {/* Stats */}
+            <div className="flex gap-6 text-sm text-muted-foreground">
+              {book.view_count > 0 && (
+                <div>
+                  <span className="font-medium text-foreground">{book.view_count.toLocaleString()}</span> views
+                </div>
+              )}
+              {book.total_downloads > 0 && (
+                <div>
+                  <span className="font-medium text-foreground">{book.total_downloads.toLocaleString()}</span> downloads
+                </div>
               )}
             </div>
-
-            {/* ISBN */}
-            {book.isbn && (
-              <div className="text-sm text-muted-foreground">
-                ISBN: {book.isbn}
-              </div>
-            )}
-
-            {/* Statistics */}
-            {(book.view_count > 0 || book.total_downloads > 0) && (
-              <div className="flex gap-6 text-sm text-muted-foreground">
-                {book.view_count > 0 && (
-                  <div>
-                    <span className="font-medium text-foreground">{book.view_count.toLocaleString()}</span> views
-                  </div>
-                )}
-                {book.total_downloads > 0 && (
-                  <div>
-                    <span className="font-medium text-foreground">{book.total_downloads.toLocaleString()}</span> downloads
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Quantity & Add to Cart */}
             {book.is_for_sale && (
@@ -528,8 +506,8 @@ const BookDetail = () => {
               </Button>
             )}
 
-            {/* Trust Badges */}
-            {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t">
+            {/* Trust Badges - Commented out
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t">
               <div className="text-center">
                 <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center mx-auto mb-2">
                   <Truck className="h-5 w-5 text-primary" />
@@ -551,7 +529,8 @@ const BookDetail = () => {
                 <p className="text-xs font-medium">Easy Returns</p>
                 <p className="text-xs text-muted-foreground">14-day policy</p>
               </div>
-            </div> */}
+            </div>
+            */}
           </div>
         </div>
 
@@ -617,10 +596,12 @@ const BookDetail = () => {
                   <span className="text-muted-foreground">Language</span>
                   <span className="font-medium">{book.language.toUpperCase()}</span>
                 </div>
-                <div className="flex justify-between py-3 border-b">
-                  <span className="text-muted-foreground">Format</span>
-                  <span className="font-medium">{book.format.toUpperCase()}</span>
-                </div>
+                {book.format && (
+                  <div className="flex justify-between py-3 border-b">
+                    <span className="text-muted-foreground">Format</span>
+                    <span className="font-medium">{book.format.toUpperCase()}</span>
+                  </div>
+                )}
                 {book.category && (
                   <div className="flex justify-between py-3 border-b">
                     <span className="text-muted-foreground">Category</span>
@@ -694,7 +675,6 @@ const BookDetail = () => {
                     title: relatedBook.title,
                     author: relatedBook.author || 'Unknown Author',
                     price: relatedBook.price,
-
                     rating: relatedBook.average_rating,
                     reviewCount: relatedBook.total_reviews,
                     image: relatedBook.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
