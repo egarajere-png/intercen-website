@@ -10,6 +10,7 @@ import { supabase } from '@/lib/SupabaseClient';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024;  // 10MB
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024;  // 10MB
 
 const CONTENT_TYPES = [
   'book',
@@ -32,6 +33,7 @@ export default function ContentUploadPage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const backpageInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     title: '',
@@ -45,6 +47,7 @@ export default function ContentUploadPage() {
     contentType: '' as typeof CONTENT_TYPES[number],
     file: null as File | null,
     cover: null as File | null,
+    backpage: null as File | null,
   });
 
   // Check authentication and scroll to top
@@ -111,7 +114,15 @@ export default function ContentUploadPage() {
         e.target.value = '';
         return;
       }
-      setForm(prev => ({ ...prev, [name === 'content_file' ? 'file' : 'cover']: file }));
+      if (name === 'backpage_image' && file.size > MAX_BACKPAGE_SIZE) {
+        toast.error('Backpage image must be under 10MB');
+        e.target.value = '';
+        return;
+      }
+      setForm(prev => ({ 
+        ...prev, 
+        [name === 'content_file' ? 'file' : name === 'cover_image' ? 'cover' : 'backpage']: file 
+      }));
     }
   };
 
@@ -126,6 +137,9 @@ export default function ContentUploadPage() {
     setForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // Check if ebook content type is selected
+  const isEbookType = form.contentType === 'ebook';
+
   const validate = () => {
     if (!form.title.trim()) {
       toast.error('Title is required');
@@ -135,10 +149,23 @@ export default function ContentUploadPage() {
       toast.error('Content Type is required');
       return false;
     }
-    if (!form.file) {
-      toast.error('Content file is required');
-      return false;
+    
+    // Additional validation for ebook content type
+    if (isEbookType) {
+      if (!form.file) {
+        toast.error('Content file is required for ebooks');
+        return false;
+      }
+      if (!form.cover) {
+        toast.error('Cover image is required for ebooks');
+        return false;
+      }
+      if (!form.backpage) {
+        toast.error('Backpage image is required for ebooks');
+        return false;
+      }
     }
+    
     return true;
   };
 
@@ -174,6 +201,7 @@ export default function ContentUploadPage() {
 
       if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
+      if (form.backpage) formData.append('backpage_image', form.backpage);
 
       // Get Supabase URL from the client
       const supabaseUrl = 'https://nnljrawwhibazudjudht.supabase.co';
@@ -207,12 +235,14 @@ export default function ContentUploadPage() {
         language: 'en',
         visibility: 'private',
         status: 'draft',
-        contentType: 'book' as any,
+        contentType: '' as any,
         file: null,
         cover: null,
+        backpage: null,
       });
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (coverInputRef.current) coverInputRef.current.value = '';
+      if (backpageInputRef.current) backpageInputRef.current.value = '';
 
       // Scroll back to top after successful upload
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -268,7 +298,9 @@ export default function ContentUploadPage() {
             </div>
 
             <div>
-              <Label htmlFor="contentType">Content Type <span className="text-red-500">*</span></Label>
+              <Label htmlFor="contentType">
+                Content Type <span className="text-red-500">*</span>
+              </Label>
               <Select
                 value={form.contentType}
                 onValueChange={(value) => handleSelectChange('contentType', value)}
@@ -285,6 +317,11 @@ export default function ContentUploadPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {isEbookType && (
+                <p className="text-xs text-amber-600 mt-2">
+                  Note: Ebooks require content file, cover image, and backpage image
+                </p>
+              )}
             </div>
 
             <div>
@@ -360,7 +397,10 @@ export default function ContentUploadPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label htmlFor="content_file">Content File <span className="text-red-500">*</span></Label>
+              <Label htmlFor="content_file">
+                Content File {isEbookType && <span className="text-red-500">*</span>}
+                {!isEbookType && <span className="text-muted-foreground">(optional)</span>}
+              </Label>
               <Input
                 id="content_file"
                 name="content_file"
@@ -368,7 +408,7 @@ export default function ContentUploadPage() {
                 accept=".pdf,.epub,.docx,.mobi"
                 onChange={handleFileChange}
                 ref={fileInputRef}
-                required
+                required={isEbookType}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-2">
@@ -377,7 +417,10 @@ export default function ContentUploadPage() {
             </div>
 
             <div>
-              <Label htmlFor="cover_image">Cover Image (optional)</Label>
+              <Label htmlFor="cover_image">
+                Cover Image {isEbookType && <span className="text-red-500">*</span>}
+                {!isEbookType && <span className="text-muted-foreground">(optional)</span>}
+              </Label>
               <Input
                 id="cover_image"
                 name="cover_image"
@@ -385,10 +428,31 @@ export default function ContentUploadPage() {
                 accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
                 ref={coverInputRef}
+                required={isEbookType}
                 className="mt-1"
               />
               <p className="text-xs text-muted-foreground mt-2">
                 JPG, PNG, WebP. Max 10MB. Will be resized automatically.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="backpage_image">
+                Backpage Image {isEbookType && <span className="text-red-500">*</span>}
+                {!isEbookType && <span className="text-muted-foreground">(optional)</span>}
+              </Label>
+              <Input
+                id="backpage_image"
+                name="backpage_image"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileChange}
+                ref={backpageInputRef}
+                required={isEbookType}
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                JPG, PNG, WebP. Max 10MB. Back cover for your content.
               </p>
             </div>
           </div>
@@ -412,7 +476,4 @@ export default function ContentUploadPage() {
       </div>
     </Layout>
   );
-} 
-
-
-
+}
