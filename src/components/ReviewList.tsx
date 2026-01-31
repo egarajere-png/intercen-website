@@ -115,6 +115,16 @@ const ReviewList: React.FC<ReviewListProps> = ({ contentId }) => {
     } catch (err: any) {
       // Try to parse Supabase error for user-friendly message
       let message = err?.message || 'Failed to report review';
+      // If error is a structured object with status_code 403 or has event_message, show full JSON
+      if (err?.response?.status_code === 403 || err?.response?.event_message || err?.status === 403) {
+        // Show the full error JSON, formatted
+        setReportError(
+          <pre style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12, color: '#b91c1c', background: '#fef2f2', padding: 8, borderRadius: 4, maxHeight: 300, overflow: 'auto'}}>
+            {JSON.stringify(err?.response || err, null, 2)}
+          </pre>
+        );
+        return;
+      }
       if (err?.response?.event_message) {
         if (err.response.event_message.includes('User trying to report own review')) {
           message = 'You cannot report your own review.';
@@ -261,7 +271,11 @@ const ReviewList: React.FC<ReviewListProps> = ({ contentId }) => {
             maxLength={500}
             disabled={reportLoading}
           />
-          {reportError && <div className="text-red-500 text-sm">{reportError}</div>}
+          {reportError && (
+            typeof reportError === 'string' ? (
+              <div className="text-red-500 text-sm">{reportError}</div>
+            ) : reportError
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={closeReportModal} disabled={reportLoading}>Cancel</Button>
             <Button variant="hero" onClick={handleReportSubmit} disabled={reportLoading}>

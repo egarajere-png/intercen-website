@@ -26,22 +26,21 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
-// import { categories } from '@/data/mockBooks';
 import { Content } from '@/types/content.types';
 import { supabase } from '@/lib/SupabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/contexts/CartContext';
 
-// Mock categories - replace with your actual categories data
+// Categories with slugs matching the database
 const categories = [
-  { id: '1', slug: 'fiction', name: 'Fiction', bookCount: 245 },
-  { id: '2', slug: 'non-fiction', name: 'Non-Fiction', bookCount: 189 },
-  { id: '3', slug: 'mystery-thriller', name: 'Mystery & Thriller', bookCount: 156 },
-  { id: '4', slug: 'romance', name: 'Romance', bookCount: 203 },
-  { id: '5', slug: 'science-fiction', name: 'Science Fiction', bookCount: 98 },
-  { id: '6', slug: 'biography', name: 'Biography', bookCount: 87 },
-  { id: '7', slug: 'self-help', name: 'Self-Help', bookCount: 124 },
-  { id: '8', slug: 'childrens-books', name: "Children's Books", bookCount: 176 },
+  { id: 'fiction', slug: 'fiction', name: 'Fiction', bookCount: 245 },
+  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction', bookCount: 189 },
+  { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller', bookCount: 156 },
+  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy', bookCount: 203 },
+  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction', bookCount: 98 },
+  { id: 'academic', slug: 'academic', name: 'Academic & Education', bookCount: 87 },
+  { id: 'business', slug: 'business', name: 'Business & Economics', bookCount: 124 },
+  { id: 'technology', slug: 'technology', name: 'Technology & Programming', bookCount: 176 },
 ];
 
 // All content types from the database
@@ -84,20 +83,22 @@ const Books = () => {
       setLoading(true);
       setError(null);
       
-      // Build filters for edge function
+      // Build filters for edge function, only include non-empty values
       let filters: any = {};
-      
-      // Filter by category
+
+      // Filter by category - use category_slug instead of category_id
       if (selectedCategories.length === 1) {
         const cat = categories.find(c => c.slug === selectedCategories[0]);
-        if (cat) filters.category_id = cat.id;
+        if (cat) {
+          filters.category_slug = cat.slug; // Changed from category_id to category_slug
+        }
       }
-      
+
       // Filter by content types
       if (selectedContentTypes.length > 0) {
-        filters.content_types = selectedContentTypes;
+        filters.content_types = selectedContentTypes.filter(Boolean);
       }
-      
+
       // Filter by price range
       if (priceRange !== 'all') {
         if (priceRange === 'free') {
@@ -121,6 +122,17 @@ const Books = () => {
       } else if (visibility !== 'any') {
         filters.visibility = visibility;
       }
+
+      // Remove empty filters
+      Object.keys(filters).forEach(key => {
+        if (
+          filters[key] === undefined ||
+          filters[key] === null ||
+          (Array.isArray(filters[key]) && filters[key].length === 0)
+        ) {
+          delete filters[key];
+        }
+      });
 
       // Map sortBy to edge function sort_by
       let sort_by = 'relevance';
@@ -177,7 +189,18 @@ const Books = () => {
         });
 
         if (!res.ok) {
-          const errorText = await res.text();
+          let errorText;
+          try {
+            errorText = await res.text();
+            // Try to parse JSON error
+            const json = JSON.parse(errorText);
+            errorText = json.error || errorText;
+            if (json.details && typeof json.details === 'string') {
+              errorText += `: ${json.details}`;
+            }
+          } catch {
+            // Not JSON
+          }
           console.error('Edge function error response:', errorText);
           throw new Error(`HTTP error! status: ${res.status}, message: ${errorText}`);
         }
@@ -193,10 +216,10 @@ const Books = () => {
         setTotalPages(1);
         setTotalResults(0);
       }
-      
+
       setLoading(false);
     };
-    
+
     fetchContent();
   }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page, fetchTrigger]);
 
@@ -548,7 +571,21 @@ const Books = () => {
             {error && (
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
                 <p className="text-sm text-destructive font-medium mb-2">Failed to load content</p>
-                <p className="text-xs text-muted-foreground mb-3">{error}</p>
+                {(() => {
+                  // Try to pretty-print JSON error if possible
+                  try {
+                    if (error.startsWith('{') || error.startsWith('[')) {
+                      const parsed = JSON.parse(error);
+                      return (
+                        <pre style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12, color: '#b91c1c', background: '#fef2f2', padding: 8, borderRadius: 4, maxHeight: 300, overflow: 'auto'}}>
+                          {JSON.stringify(parsed, null, 2)}
+                        </pre>
+                      );
+                    }
+                  } catch {}
+                  // Otherwise, show as plain text
+                  return <p className="text-xs text-muted-foreground mb-3">{error}</p>;
+                })()}
                 <Button
                   variant="outline"
                   size="sm"

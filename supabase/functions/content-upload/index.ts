@@ -1,7 +1,7 @@
 // supabase/functions/content-upload/index.ts
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { multiParser, FormFile } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
+import { multiParser } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +15,7 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 const MAX_CONTENT_SIZE = 100 * 1024 * 1024 // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024    // 10MB
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024 // 10MB
 
 // Comprehensive list of allowed MIME types
 const ALLOWED_CONTENT_MIMES = [
@@ -33,6 +34,7 @@ const ALLOWED_CONTENT_MIMES = [
 ]
 
 const ALLOWED_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp']
+const ALLOWED_BACKPAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
 // Valid file extensions
 const validContentExtensions = [
@@ -42,6 +44,7 @@ const validContentExtensions = [
 ]
 
 const validCoverExtensions = ['jpg', 'jpeg', 'png', 'webp']
+const validBackpageExtensions = ['jpg', 'jpeg', 'png', 'webp']
 
 // Format mapping
 const formatMap: Record<string, string> = {
@@ -95,13 +98,7 @@ const getStorageBucket = (contentType: string, mimeType: string): string => {
   return 'documets' // note: likely a typo in original – should probably be 'documents'
 }
 
-// Helper to get a single FormFile from possibly array
-const getSingleFile = (file: FormFile | FormFile[] | undefined): FormFile | undefined => {
-  if (!file) return undefined
-  return Array.isArray(file) ? file[0] : file
-}
-
-Deno.serve(async (req): Promise<Response> => {
+Deno.serve(async (req) => {
   // Handle CORS preflight immediately - BEFORE any other logic
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
@@ -147,10 +144,9 @@ Deno.serve(async (req): Promise<Response> => {
     let form
     try {
       form = await multiParser(req)
-    } catch (e: unknown) {
-      const parseErr = e as Error
-      console.error('Parse error:', parseErr.message)
-      return new Response(JSON.stringify({ error: 'Failed to parse form', details: parseErr.message }), {
+    } catch (e) {
+      console.error('Parse error:', e.message)
+      return new Response(JSON.stringify({ error: 'Failed to parse form', details: e.message }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -163,16 +159,10 @@ Deno.serve(async (req): Promise<Response> => {
       })
     }
 
-    const contentFile = getSingleFile(form.files.content_file)
-    const coverFile = getSingleFile(form.files.cover_image)
+    const contentFile = form.files.content_file
+    const coverFile = form.files.cover_image
+    const backpageFile = form.files.backpage_image
     const f = form.fields
-
-    if (!contentFile) {
-      return new Response(JSON.stringify({ error: 'content_file required' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
 
     const title = (f.title as string)?.trim()
     const content_type = (f.content_type as string)?.trim()
@@ -191,57 +181,26 @@ Deno.serve(async (req): Promise<Response> => {
       })
     }
 
-    // Validate content file
-    const contentExt = contentFile.filename.split('.').pop()?.toLowerCase() || ''
-    const contentMimeType = (contentFile as any).contentType || (contentFile as any).type || ''
-    const isValidContentMime = contentMimeType && ALLOWED_CONTENT_MIMES.includes(contentMimeType)
-    const isValidContentExt = validContentExtensions.includes(contentExt)
-
-    if (!isValidContentMime && !isValidContentExt) {
-      return new Response(JSON.stringify({
-        error: 'Invalid content file type',
-        received_type: contentMimeType || 'undefined',
-        received_extension: contentExt,
-        allowed_extensions: validContentExtensions
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    const contentFileSize = contentFile.content.length
-    if (contentFileSize > MAX_CONTENT_SIZE) {
-      return new Response(JSON.stringify({
-        error: 'File too large',
-        size: `${(contentFileSize / 1024 / 1024).toFixed(2)}MB`,
-        limit: '100MB'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Validate cover if present
-    if (coverFile) {
-      const coverExt = coverFile.filename.split('.').pop()?.toLowerCase() || ''
-      const coverMimeType = (coverFile as any).contentType || (coverFile as any).type || ''
-      const isValidCoverMime = coverMimeType && ALLOWED_COVER_MIMES.includes(coverMimeType)
-      const isValidCoverExt = validCoverExtensions.includes(coverExt)
-
-      if (!isValidCoverMime && !isValidCoverExt) {
-        return new Response(JSON.stringify({
-          error: 'Invalid cover image type',
-          received_type: coverMimeType || 'undefined',
-          received_extension: coverExt,
-          allowed_extensions: validCoverExtensions
-        }), {
+    // Special validation for ebook content type
+    const isEbookType = content_type.toLowerCase() === 'ebook'
+    
+    if (isEbookType) {
+      if (!contentFile) {
+        return new Response(JSON.stringify({ error: 'content_file is required for ebooks' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
-
-      if (coverFile.content.length > MAX_COVER_SIZE) {
-        return new Response(JSON.stringify({ error: 'Cover too large' }), {
+      
+      if (!coverFile) {
+        return new Response(JSON.stringify({ error: 'cover_image is required for ebooks' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+      
+      if (!backpageFile) {
+        return new Response(JSON.stringify({ error: 'backpage_image is required for ebooks' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
@@ -250,55 +209,145 @@ Deno.serve(async (req): Promise<Response> => {
 
     console.log('Validation passed')
 
-    // Determine format and bucket
-    const format = getFormatFromFilename(contentFile.filename)
-    const storageBucket = getStorageBucket(content_type, contentMimeType)
+    // Determine format and bucket (only if content file exists)
+    let format = 'unknown'
+    let storageBucket = 'documets'
+    let effectiveContentMime = 'application/octet-stream'
+    let file_url: string | null = null
+    let file_size_bytes = 0
 
-    // Determine effective MIME type for content file upload (fallback to extension)
-    let effectiveContentMime = contentMimeType
-    if (!effectiveContentMime || !ALLOWED_CONTENT_MIMES.includes(effectiveContentMime)) {
-      effectiveContentMime = mimeMap[contentExt] || 'application/octet-stream'
-      console.log(`MIME type missing or invalid – falling back to ${effectiveContentMime} based on extension`)
+    // Only process content file if it exists
+    if (contentFile) {
+      // Validate content file
+      const contentExt = contentFile.filename.split('.').pop()?.toLowerCase() || ''
+      const isValidContentMime = contentFile.type && ALLOWED_CONTENT_MIMES.includes(contentFile.type)
+      const isValidContentExt = validContentExtensions.includes(contentExt)
+
+      if (!isValidContentMime && !isValidContentExt) {
+        return new Response(JSON.stringify({
+          error: 'Invalid content file type',
+          received_type: contentFile.type || 'undefined',
+          received_extension: contentExt,
+          allowed_extensions: validContentExtensions
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (contentFile.length > MAX_CONTENT_SIZE) {
+        return new Response(JSON.stringify({
+          error: 'File too large',
+          size: `${(contentFile.length / 1024 / 1024).toFixed(2)}MB`,
+          limit: '100MB'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      format = getFormatFromFilename(contentFile.filename)
+      storageBucket = getStorageBucket(content_type, contentFile.type || '')
+
+      // Determine effective MIME type for content file upload (fallback to extension)
+      effectiveContentMime = contentFile.type
+      if (!effectiveContentMime || !ALLOWED_CONTENT_MIMES.includes(effectiveContentMime)) {
+        effectiveContentMime = mimeMap[contentExt] || 'application/octet-stream'
+        console.log(`MIME type missing or invalid – falling back to ${effectiveContentMime} based on extension`)
+      }
+
+      // Upload content file
+      const ext = contentFile.filename.split('.').pop()?.toLowerCase() || format
+      const contentPath = `${user.id}/${crypto.randomUUID()}.${ext}`
+
+      console.log('Uploading to bucket:', storageBucket, 'with MIME:', effectiveContentMime)
+
+      const { error: uploadErr } = await supabaseAdmin.storage
+        .from(storageBucket)
+        .upload(contentPath, contentFile.content, {
+          contentType: effectiveContentMime,
+          upsert: false,
+        })
+
+      if (uploadErr) {
+        console.error('Upload error:', uploadErr)
+        return new Response(JSON.stringify({
+          error: 'Upload failed',
+          details: uploadErr.message,
+          bucket: storageBucket
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      const { data: { publicUrl } } = supabaseAdmin.storage
+        .from(storageBucket)
+        .getPublicUrl(contentPath)
+
+      file_url = publicUrl
+      file_size_bytes = contentFile.length
+      console.log('File uploaded:', file_url)
     }
 
-    // Upload content file
-    const ext = contentFile.filename.split('.').pop()?.toLowerCase() || format
-    const contentPath = `${user.id}/${crypto.randomUUID()}.${ext}`
+    // Validate cover if present
+    if (coverFile) {
+      const coverExt = coverFile.filename.split('.').pop()?.toLowerCase() || ''
+      const isValidCoverMime = coverFile.type && ALLOWED_COVER_MIMES.includes(coverFile.type)
+      const isValidCoverExt = validCoverExtensions.includes(coverExt)
 
-    console.log('Uploading to bucket:', storageBucket, 'with MIME:', effectiveContentMime)
+      if (!isValidCoverMime && !isValidCoverExt) {
+        return new Response(JSON.stringify({
+          error: 'Invalid cover image type',
+          received_type: coverFile.type || 'undefined',
+          received_extension: coverExt,
+          allowed_extensions: validCoverExtensions
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
 
-    const { error: uploadErr } = await supabaseAdmin.storage
-      .from(storageBucket)
-      .upload(contentPath, contentFile.content, {
-        contentType: effectiveContentMime,
-        upsert: false,
-      })
-
-    if (uploadErr) {
-      console.error('Upload error:', uploadErr)
-      return new Response(JSON.stringify({
-        error: 'Upload failed',
-        details: uploadErr.message,
-        bucket: storageBucket
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+      if (coverFile.length > MAX_COVER_SIZE) {
+        return new Response(JSON.stringify({ error: 'Cover too large' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
     }
 
-    const { data: { publicUrl: file_url } } = supabaseAdmin.storage
-      .from(storageBucket)
-      .getPublicUrl(contentPath)
+    // Validate backpage if present
+    if (backpageFile) {
+      const backpageExt = backpageFile.filename.split('.').pop()?.toLowerCase() || ''
+      const isValidBackpageMime = backpageFile.type && ALLOWED_BACKPAGE_MIMES.includes(backpageFile.type)
+      const isValidBackpageExt = validBackpageExtensions.includes(backpageExt)
 
-    console.log('File uploaded:', file_url)
+      if (!isValidBackpageMime && !isValidBackpageExt) {
+        return new Response(JSON.stringify({
+          error: 'Invalid backpage image type',
+          received_type: backpageFile.type || 'undefined',
+          received_extension: backpageExt,
+          allowed_extensions: validBackpageExtensions
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (backpageFile.length > MAX_BACKPAGE_SIZE) {
+        return new Response(JSON.stringify({ error: 'Backpage too large' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+    }
 
     // Handle cover image
     let cover_image_url: string | null = null
     if (coverFile) {
       try {
         const coverExt = coverFile.filename.split('.').pop()?.toLowerCase() || 'jpg'
-        const coverMimeType = (coverFile as any).contentType || (coverFile as any).type || ''
-        let effectiveCoverMime = coverMimeType
+        let effectiveCoverMime = coverFile.type
         if (!effectiveCoverMime || !ALLOWED_COVER_MIMES.includes(effectiveCoverMime)) {
           effectiveCoverMime = mimeMap[coverExt] || 'image/jpeg'
         }
@@ -325,6 +374,38 @@ Deno.serve(async (req): Promise<Response> => {
       }
     }
 
+    // Handle backpage image
+    let backpage_image_url: string | null = null
+    if (backpageFile) {
+      try {
+        const backpageExt = backpageFile.filename.split('.').pop()?.toLowerCase() || 'jpg'
+        let effectiveBackpageMime = backpageFile.type
+        if (!effectiveBackpageMime || !ALLOWED_BACKPAGE_MIMES.includes(effectiveBackpageMime)) {
+          effectiveBackpageMime = mimeMap[backpageExt] || 'image/jpeg'
+        }
+
+        const backpagePath = `${user.id}/backpages/${crypto.randomUUID()}.${backpageExt}`
+        const { error: backpageErr } = await supabaseAdmin.storage
+          .from('book-covers')  // Using same bucket as covers, but in separate folder
+          .upload(backpagePath, backpageFile.content, {
+            contentType: effectiveBackpageMime,
+            upsert: false,
+          })
+
+        if (backpageErr) {
+          console.warn('Backpage upload failed:', backpageErr.message)
+        } else {
+          const { data: { publicUrl } } = supabaseAdmin.storage
+            .from('book-covers')
+            .getPublicUrl(backpagePath)
+          backpage_image_url = publicUrl
+          console.log('Backpage uploaded:', backpage_image_url)
+        }
+      } catch (e) {
+        console.warn('Backpage upload exception:', e)
+      }
+    }
+
     // Insert database record
     const insertData = {
       title,
@@ -338,8 +419,9 @@ Deno.serve(async (req): Promise<Response> => {
       category_id: (f.category_id as string) || null,
       language: (f.language as string) || 'en',
       cover_image_url,
+      backpage_image_url,
       file_url,
-      file_size_bytes: contentFileSize,
+      file_size_bytes,
       page_count: null,
       price: f.price ? parseFloat(f.price as string) : 0.00,
       is_free: (f.is_free as string) === 'true',
@@ -387,7 +469,10 @@ Deno.serve(async (req): Promise<Response> => {
         metadata: {
           bucket: storageBucket,
           format,
-          file_size: `${(contentFileSize / 1024 / 1024).toFixed(2)}MB`,
+          file_size: contentFile ? `${(contentFile.length / 1024 / 1024).toFixed(2)}MB` : 'N/A',
+          has_content_file: !!file_url,
+          has_cover: !!cover_image_url,
+          has_backpage: !!backpage_image_url,
         }
       }),
       {
@@ -396,18 +481,17 @@ Deno.serve(async (req): Promise<Response> => {
       }
     )
 
-  } catch (error: unknown) {
-    const err = error as Error
+  } catch (error) {
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', err.constructor?.name || 'Unknown')
-    console.error('Message:', err.message || 'No message')
-    console.error('Stack:', err.stack || 'No stack')
+    console.error('Type:', error.constructor?.name || 'Unknown')
+    console.error('Message:', error.message || 'No message')
+    console.error('Stack:', error.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: err.message || 'Unknown error',
-        type: err.constructor?.name || 'Error'
+        message: error.message || 'Unknown error',
+        type: error.constructor?.name || 'Error'
       }),
       {
         status: 500,
