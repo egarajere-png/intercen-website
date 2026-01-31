@@ -24,6 +24,7 @@ import { ContentDeleteButton } from '@/components/contents/ContentDeleteButton';
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
 const CONTENT_TYPES = [
   'book',
@@ -33,6 +34,10 @@ const CONTENT_TYPES = [
   'report',
   'manual',
   'guide',
+  'manuscript',
+  'article',
+  'thesis',
+  'dissertation',
 ] as const;
 
 const VISIBILITY_OPTIONS = [
@@ -75,6 +80,7 @@ export default function ContentUpdatePage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  const backpageInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     title: '',
@@ -97,9 +103,14 @@ export default function ContentUpdatePage() {
     tags: '',
     file: null as File | null,
     cover: null as File | null,
+    backpage: null as File | null,
     currentFileUrl: '',
     currentCoverUrl: '',
+    currentBackpageUrl: '',
   });
+
+  // Check if ebook content type is selected
+  const isEbookType = form.contentType === 'ebook';
 
   // ───────────────────────────────────────────────
   // Load data on mount
@@ -167,8 +178,10 @@ export default function ContentUpdatePage() {
         tags: data.tags?.join(', ') || '',
         file: null,
         cover: null,
+        backpage: null,
         currentFileUrl: data.file_url || '',
         currentCoverUrl: data.cover_image_url || '',
+        currentBackpageUrl: data.backpage_image_url || '',
       });
     } catch (err: any) {
       console.error('Load content error:', err);
@@ -211,10 +224,15 @@ export default function ContentUpdatePage() {
       e.target.value = '';
       return;
     }
+    if (name === 'backpage_image' && file.size > MAX_BACKPAGE_SIZE) {
+      toast.error('Backpage image must be under 10MB');
+      e.target.value = '';
+      return;
+    }
 
     setForm((prev) => ({
       ...prev,
-      [name === 'content_file' ? 'file' : 'cover']: file,
+      [name === 'content_file' ? 'file' : name === 'cover_image' ? 'cover' : 'backpage']: file,
     }));
   };
 
@@ -238,46 +256,46 @@ export default function ContentUpdatePage() {
   // Partial / auto-save logic (debounced)
   // ───────────────────────────────────────────────
   const partialUpdate = async (updates: Record<string, any>) => {
-  try {
-    // Force get fresh session (triggers refresh if needed)
-    const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+    try {
+      // Force get fresh session (triggers refresh if needed)
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
 
-    if (sessionErr) {
-      console.error('getSession failed:', sessionErr);
-      toast.error('Authentication error — please sign in again');
-      return;
+      if (sessionErr) {
+        console.error('getSession failed:', sessionErr);
+        toast.error('Authentication error — please sign in again');
+        return;
+      }
+
+      if (!session?.access_token) {
+        console.error('No active session / token');
+        toast.error('You appear to be logged out. Please sign in.');
+        return;
+      }
+
+      console.log('Partial update → session user:', session.user?.id || 'unknown');
+      console.log('Token prefix:', session.access_token.substring(0, 10) + '...');
+
+      const payload = {
+        content_id: id!,
+        ...updates,
+      };
+
+      const { data, error } = await supabase.functions.invoke('content-part-update', {
+        body: payload,
+        // No need to set Authorization — SDK does it
+      });
+
+      if (error) {
+        console.error('Invoke error:', error);
+        throw error;
+      }
+
+      console.log('Partial update OK:', data);
+    } catch (err: any) {
+      console.error('Partial update crashed:', err);
+      toast.error('Could not save change — check console');
     }
-
-    if (!session?.access_token) {
-      console.error('No active session / token');
-      toast.error('You appear to be logged out. Please sign in.');
-      return;
-    }
-
-    console.log('Partial update → session user:', session.user?.id || 'unknown');
-    console.log('Token prefix:', session.access_token.substring(0, 10) + '...');
-
-    const payload = {
-      content_id: id!,
-      ...updates,
-    };
-
-    const { data, error } = await supabase.functions.invoke('content-part-update', {
-      body: payload,
-      // No need to set Authorization — SDK does it
-    });
-
-    if (error) {
-      console.error('Invoke error:', error);
-      throw error;
-    }
-
-    console.log('Partial update OK:', data);
-  } catch (err: any) {
-    console.error('Partial update crashed:', err);
-    toast.error('Could not save change — check console');
-  }
-};
+  };
 
   const debouncedPartialUpdate = debounce(partialUpdate, 800, { leading: false, trailing: true });
 
@@ -349,6 +367,7 @@ export default function ContentUpdatePage() {
 
       if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
+      if (form.backpage) formData.append('backpage_image', form.backpage);
 
       const { error } = await supabase.functions.invoke('content-update', {
         body: formData,
@@ -364,7 +383,8 @@ export default function ContentUpdatePage() {
       // Clear file inputs
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (coverInputRef.current) coverInputRef.current.value = '';
-      setForm((prev) => ({ ...prev, file: null, cover: null }));
+      if (backpageInputRef.current) backpageInputRef.current.value = '';
+      setForm((prev) => ({ ...prev, file: null, cover: null, backpage: null }));
     } catch (err: any) {
       console.error('Full update failed:', err);
       toast.error(err.message || 'Update failed');
@@ -443,6 +463,25 @@ export default function ContentUpdatePage() {
                       className="text-xs text-blue-600 hover:underline"
                     >
                       View current cover
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {form.currentBackpageUrl && (
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="flex items-center gap-3">
+                  <ImageIcon className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="font-medium text-sm">Backpage Image</p>
+                    <a
+                      href={form.currentBackpageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      View current backpage
                     </a>
                   </div>
                 </div>
@@ -549,6 +588,11 @@ export default function ContentUpdatePage() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isEbookType && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      Note: Ebooks require content file, cover image, and backpage image when uploading
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -792,7 +836,7 @@ export default function ContentUpdatePage() {
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-2">
-                    Max 100MB
+                    Max 100MB. Supported: PDF, EPUB, DOCX, MOBI
                   </p>
                 </div>
 
@@ -808,7 +852,23 @@ export default function ContentUpdatePage() {
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground mt-2">
-                    Max 10MB
+                    Max 10MB. JPG, PNG, WebP
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="backpage_image">Replace Backpage Image (Optional)</Label>
+                  <Input
+                    id="backpage_image"
+                    name="backpage_image"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange}
+                    ref={backpageInputRef}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Max 10MB. JPG, PNG, WebP
                   </p>
                 </div>
               </div>
