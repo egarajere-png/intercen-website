@@ -178,8 +178,15 @@ const BookDetail = () => {
                     relCategory = relCatData;
                   }
                 }
+                
+                // Ensure proper image URL with fallback
+                const coverImageUrl = item.cover_image_url && item.cover_image_url.trim() !== ''
+                  ? item.cover_image_url
+                  : "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
+                
                 return {
                   ...item,
+                  cover_image_url: coverImageUrl,
                   category: relCategory,
                   original_price: item.price > 0 ? item.price * 1.25 : undefined,
                 };
@@ -677,6 +684,7 @@ const BookDetail = () => {
                     price: relatedBook.price,
                     rating: relatedBook.average_rating,
                     reviewCount: relatedBook.total_reviews,
+                    // Use the properly validated cover_image_url from the enriched data
                     image: relatedBook.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
                     category: relatedBook.category?.name || relatedBook.content_type,
                     stock: relatedBook.stock_quantity,

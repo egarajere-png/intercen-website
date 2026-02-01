@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { supabase } from '@/lib/SupabaseClient';
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024;  // 10MB
 const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024;  // 10MB
 
@@ -28,7 +27,6 @@ export default function ContentUploadPage() {
   const [progress, setProgress] = useState(0);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const backpageInputRef = useRef<HTMLInputElement>(null);
 
@@ -42,7 +40,6 @@ export default function ContentUploadPage() {
     visibility: 'private' as 'public' | 'private' | 'organization' | 'restricted',
     status: 'draft' as 'draft' | 'pending_review' | 'published',
     contentType: '' as typeof CONTENT_TYPES[number],
-    file: null as File | null,
     cover: null as File | null,
     backpage: null as File | null,
   });
@@ -101,11 +98,6 @@ export default function ContentUploadPage() {
     const { name, files } = e.target;
     if (files && files[0]) {
       const file = files[0];
-      if (name === 'content_file' && file.size > MAX_FILE_SIZE) {
-        toast.error('Content file must be under 100MB');
-        e.target.value = '';
-        return;
-      }
       if (name === 'cover_image' && file.size > MAX_COVER_SIZE) {
         toast.error('Cover image must be under 10MB');
         e.target.value = '';
@@ -118,7 +110,7 @@ export default function ContentUploadPage() {
       }
       setForm(prev => ({ 
         ...prev, 
-        [name === 'content_file' ? 'file' : name === 'cover_image' ? 'cover' : 'backpage']: file 
+        [name === 'cover_image' ? 'cover' : 'backpage']: file 
       }));
     }
   };
@@ -149,10 +141,6 @@ export default function ContentUploadPage() {
     
     // Additional validation for ebook content type
     if (isEbookType) {
-      if (!form.file) {
-        toast.error('Content file is required for ebooks');
-        return false;
-      }
       if (!form.cover) {
         toast.error('Cover image is required for ebooks');
         return false;
@@ -196,7 +184,6 @@ export default function ContentUploadPage() {
       formData.append('visibility', form.visibility);
       formData.append('status', form.status);
 
-      if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
       if (form.backpage) formData.append('backpage_image', form.backpage);
 
@@ -216,7 +203,19 @@ export default function ContentUploadPage() {
 
       if (!response.ok) {
         console.error('Upload error:', result);
-        throw new Error(result.error || 'Upload failed');
+        
+        // Display the user-friendly error message from the backend
+        const errorMessage = result.error || 'Upload failed. Please try again.';
+        toast.error(errorMessage, {
+          duration: 6000, // Show for 6 seconds since errors might be longer
+        });
+        
+        // Log technical details for debugging
+        if (result.technical_details) {
+          console.error('Technical details:', result.technical_details);
+        }
+        
+        return; // Don't throw, just return to prevent generic error
       }
 
       toast.success('Content uploaded successfully!');
@@ -233,11 +232,9 @@ export default function ContentUploadPage() {
         visibility: 'private',
         status: 'draft',
         contentType: '' as any,
-        file: null,
         cover: null,
         backpage: null,
       });
-      if (fileInputRef.current) fileInputRef.current.value = '';
       if (coverInputRef.current) coverInputRef.current.value = '';
       if (backpageInputRef.current) backpageInputRef.current.value = '';
 
@@ -316,7 +313,7 @@ export default function ContentUploadPage() {
               </Select>
               {isEbookType && (
                 <p className="text-xs text-amber-600 mt-2">
-                  Note: Ebooks require content file, cover image, and backpage image
+                  Note: Ebooks require cover image and backpage image
                 </p>
               )}
             </div>
@@ -393,26 +390,6 @@ export default function ContentUploadPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label htmlFor="content_file">
-                Content File {isEbookType && <span className="text-red-500">*</span>}
-                {!isEbookType && <span className="text-muted-foreground">(optional)</span>}
-              </Label>
-              <Input
-                id="content_file"
-                name="content_file"
-                type="file"
-                accept=".pdf,.epub,.docx,.mobi"
-                onChange={handleFileChange}
-                ref={fileInputRef}
-                required={isEbookType}
-                className="mt-1"
-              />
-              <p className="text-xs text-muted-foreground mt-2">
-                Supported: PDF, EPUB, DOCX, MOBI. Max 100MB.
-              </p>
-            </div>
-
             <div>
               <Label htmlFor="cover_image">
                 Cover Image {isEbookType && <span className="text-red-500">*</span>}
