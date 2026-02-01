@@ -22,7 +22,6 @@ import { toast } from 'sonner';
 import { Loader2, Upload, FileText, Image as ImageIcon, History } from 'lucide-react';
 import { ContentDeleteButton } from '@/components/contents/ContentDeleteButton';
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -78,7 +77,6 @@ export default function ContentUpdatePage() {
   const [versionHistory, setVersionHistory] = useState<VersionHistory[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const backpageInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +99,6 @@ export default function ContentUpdatePage() {
     is_featured: false,
     is_for_sale: false,
     tags: '',
-    file: null as File | null,
     cover: null as File | null,
     backpage: null as File | null,
     currentFileUrl: '',
@@ -176,7 +173,6 @@ export default function ContentUpdatePage() {
         is_featured: !!data.is_featured,
         is_for_sale: !!data.is_for_sale,
         tags: data.tags?.join(', ') || '',
-        file: null,
         cover: null,
         backpage: null,
         currentFileUrl: data.file_url || '',
@@ -214,11 +210,6 @@ export default function ContentUpdatePage() {
 
     const file = files[0];
 
-    if (name === 'content_file' && file.size > MAX_FILE_SIZE) {
-      toast.error('Content file must be under 100MB');
-      e.target.value = '';
-      return;
-    }
     if (name === 'cover_image' && file.size > MAX_COVER_SIZE) {
       toast.error('Cover image must be under 10MB');
       e.target.value = '';
@@ -232,7 +223,7 @@ export default function ContentUpdatePage() {
 
     setForm((prev) => ({
       ...prev,
-      [name === 'content_file' ? 'file' : name === 'cover_image' ? 'cover' : 'backpage']: file,
+      [name === 'cover_image' ? 'cover' : 'backpage']: file,
     }));
   };
 
@@ -365,7 +356,6 @@ export default function ContentUpdatePage() {
         formData.append('tags', JSON.stringify(tagsArray));
       }
 
-      if (form.file) formData.append('content_file', form.file);
       if (form.cover) formData.append('cover_image', form.cover);
       if (form.backpage) formData.append('backpage_image', form.backpage);
 
@@ -373,7 +363,17 @@ export default function ContentUpdatePage() {
         body: formData,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Update error:', error);
+        
+        // Display user-friendly error message
+        const errorMessage = error.message || 'Update failed. Please try again.';
+        toast.error(errorMessage, {
+          duration: 6000,
+        });
+        
+        return; // Don't throw, return to prevent showing generic error
+      }
 
       toast.success('Content updated successfully');
 
@@ -381,10 +381,9 @@ export default function ContentUpdatePage() {
       await loadContent();
 
       // Clear file inputs
-      if (fileInputRef.current) fileInputRef.current.value = '';
       if (coverInputRef.current) coverInputRef.current.value = '';
       if (backpageInputRef.current) backpageInputRef.current.value = '';
-      setForm((prev) => ({ ...prev, file: null, cover: null, backpage: null }));
+      setForm((prev) => ({ ...prev, cover: null, backpage: null }));
     } catch (err: any) {
       console.error('Full update failed:', err);
       toast.error(err.message || 'Update failed');
@@ -590,7 +589,7 @@ export default function ContentUpdatePage() {
                   </Select>
                   {isEbookType && (
                     <p className="text-xs text-amber-600 mt-2">
-                      Note: Ebooks require content file, cover image, and backpage image when uploading
+                      Note: Ebooks require cover image and backpage image when uploading
                     </p>
                   )}
                 </div>
@@ -820,26 +819,10 @@ export default function ContentUpdatePage() {
           {/* ───────────────────── Files ───────────────────── */}
           <Card>
             <CardHeader>
-              <CardTitle>Files</CardTitle>
+              <CardTitle>Images</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="content_file">Replace Content File (Optional)</Label>
-                  <Input
-                    id="content_file"
-                    name="content_file"
-                    type="file"
-                    accept=".pdf,.epub,.docx,.mobi,.txt,.md"
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Max 100MB. Supported: PDF, EPUB, DOCX, MOBI
-                  </p>
-                </div>
-
                 <div>
                   <Label htmlFor="cover_image">Replace Cover Image (Optional)</Label>
                   <Input

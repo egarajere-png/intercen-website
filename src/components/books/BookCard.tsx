@@ -40,6 +40,9 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
                   src={book.coverImage}
                   alt={book.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  onError={(e) => {
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
+                  }}
                 />
               </div>
               {book.bestseller && (
@@ -102,6 +105,9 @@ export const BookCard = ({ book, variant = 'default' }: BookCardProps) => {
             src={book.coverImage}
             alt={book.title}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={(e) => {
+              e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
+            }}
           />
           
           {/* Badges */}
