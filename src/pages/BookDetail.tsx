@@ -668,7 +668,7 @@ const BookDetail = () => {
         </div>
 
         {/* Related Books */}
-        {relatedBooks.length > 0 && (
+        {/* {relatedBooks.length > 0 && (
           <div className="mt-16">
             <h2 className="font-serif text-2xl md:text-3xl font-bold mb-6">
               You May Also Like
@@ -694,7 +694,7 @@ const BookDetail = () => {
               ))}
             </div>
           </div>
-        )}
+        )} */}
       </div>
     </Layout>
   );
