@@ -27,10 +27,6 @@ import ContentUpdatePage from "./pages/ContentUpdatePage";
 import { ContentPublishButton } from "@/components/contents/ContentPublishButton";
 import ContentDeletePage from "./pages/ContentDeletePage";
 import ContentReviewsPage from "./pages/ContentReviewsPage";
-
-
-
-
 import ContentDeleteConfirmationPage from "./pages/ContentDeleteConfirmationPage";
 import ContentSearch from "./pages/ContentSearch";
 
@@ -60,10 +56,6 @@ const App = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         console.log("Session recovered from URL hash:", session.user.email);
-        // Optional: You can force redirect to /profile-setup if needed
-        // if (window.location.pathname === '/' && window.location.hash.includes('type=signup')) {
-        //   window.location.replace('/profile-setup');
-        // }
       }
     });
 
@@ -91,22 +83,27 @@ const App = () => {
                 <Route path="/books" element={<Books />} />
                 <Route path="/books/:id" element={<BookDetail />} />
                 <Route path="/cart" element={<Cart />} />
+                
+                {/* Payment Routes */}
                 <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
-                <Route path="/about" element={<About />} />
                 <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
+                <Route path="/payment-success" element={<PaymentConfirmationPage />} />
+                <Route path="/payment-failed" element={<PaymentConfirmationPage />} />
+                <Route path="/payment-cancelled" element={<PaymentConfirmationPage />} />
+                <Route path="/payment-pending" element={<PaymentConfirmationPage />} />
+                <Route path="/payment-status" element={<PaymentConfirmationPage />} />
+                
+                {/* Other Pages */}
+                <Route path="/about" element={<About />} />
                 <Route path="/publish" element={<PublishWithUs />} />
                 <Route path="/services" element={<ProductsServices />} />
+                
+                {/* Auth Routes */}
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/signin" element={<Auth />} />
                 <Route path="/login" element={<Auth />} />
-                <Route path="/upload" element={<ContentUpload />} />
-
-                {/* NEW: Profile setup route after email confirmation */}
                 <Route path="/profile-setup" element={<ProfileSetup />} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/content-management" element={<ContentManagement />} />
-                <Route path="/content/:id" element={<ContentViewPage />} />
-
                 <Route
                   path="/reset-password"
                   element={
@@ -115,8 +112,11 @@ const App = () => {
                     </Suspense>
                   }
                 />
-
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                
+                {/* Content Management Routes */}
+                <Route path="/upload" element={<ContentUpload />} />
+                <Route path="/content-management" element={<ContentManagement />} />
+                <Route path="/content/:id" element={<ContentViewPage />} />
                 <Route path="/content/update/:id" element={<ContentUpdatePage />} />
                 <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
                 <Route path="/content/delete/:id" element={<ContentDeletePage />} />
