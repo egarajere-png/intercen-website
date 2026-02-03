@@ -33,14 +33,14 @@ import { useCart } from '@/contexts/CartContext';
 
 // Categories with slugs matching the database
 const categories = [
-  { id: 'fiction', slug: 'fiction', name: 'Fiction', bookCount: 245 },
-  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction', bookCount: 189 },
-  { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller', bookCount: 156 },
-  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy', bookCount: 203 },
-  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction', bookCount: 98 },
-  { id: 'academic', slug: 'academic', name: 'Academic & Education', bookCount: 87 },
-  { id: 'business', slug: 'business', name: 'Business & Economics', bookCount: 124 },
-  { id: 'technology', slug: 'technology', name: 'Technology & Programming', bookCount: 176 },
+  { id: 'fiction', slug: 'fiction', name: 'Fiction' },
+  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction',  },
+  { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller'},
+  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy'},
+  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction'},
+  { id: 'academic', slug: 'academic', name: 'Academic & Education' },
+  { id: 'business', slug: 'business', name: 'Business & Economics' },
+  { id: 'technology', slug: 'technology', name: 'Technology & Programming' },
 ];
 
 // All content types from the database
@@ -315,7 +315,7 @@ const Books = () => {
         <h3 className="font-semibold mb-4 text-foreground">Categories</h3>
         <div className="space-y-3">
           {categories.map(category => (
-            <label
+              <label
               key={category.id}
               className="flex items-center gap-3 cursor-pointer group"
             >
@@ -326,9 +326,9 @@ const Books = () => {
               <span className="text-sm group-hover:text-primary transition-colors">
                 {category.name}
               </span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                ({category.bookCount})
-              </span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {category.bookCount}
+                </span>
             </label>
           ))}
         </div>
