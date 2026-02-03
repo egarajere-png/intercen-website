@@ -29,15 +29,17 @@ interface CheckoutRequest {
   discount_code?: string;
 }
 
+interface ContentInfo {
+  title: string;
+  stock_quantity: number;
+}
+
 interface CartItem {
   id: string;
   content_id: string;
   quantity: number;
   price: number;
-  content: {
-    title: string;
-    stock_quantity: number;
-  };
+  content: ContentInfo;
 }
 
 // Generate random alphanumeric string
@@ -60,6 +62,28 @@ function generateOrderNumber(): string {
   const random = randomString(4);
   
   return `ORD-${dateStr}-${random}`;
+}
+
+// Helper to convert raw cart item to typed
+function toCartItem(item: unknown): CartItem {
+  const rawItem = item as {
+    id: string;
+    content_id: string;
+    quantity: number;
+    price: number;
+    content: ContentInfo | ContentInfo[];
+  };
+  
+  // Handle the case where content might be an array from the join
+  const content = Array.isArray(rawItem.content) ? rawItem.content[0] : rawItem.content;
+  
+  return {
+    id: rawItem.id,
+    content_id: rawItem.content_id,
+    quantity: rawItem.quantity,
+    price: rawItem.price,
+    content: content || { title: 'Unknown', stock_quantity: 0 }
+  };
 }
 
 serve(async (req) => {
@@ -92,7 +116,6 @@ serve(async (req) => {
 
     // Extract JWT token
     const token = authHeader.replace('Bearer ', '');
-    console.log('Token received:', token.substring(0, 20) + '...');
     
     // Create Supabase admin client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -127,7 +150,7 @@ serve(async (req) => {
     let body: CheckoutRequest;
     try {
       body = await req.json();
-      console.log('Request body received:', JSON.stringify(body, null, 2));
+      console.log('Request body received');
     } catch (parseError) {
       console.error('JSON parse error:', parseError);
       return new Response(
@@ -188,7 +211,7 @@ serve(async (req) => {
     console.log('Cart ID:', cartId);
 
     // Get cart items with content details
-    const { data: cartItems, error: itemsError } = await supabaseAdmin
+    const { data: rawCartItems, error: itemsError } = await supabaseAdmin
       .from('cart_items')
       .select(`
         id,
@@ -207,7 +230,7 @@ serve(async (req) => {
       throw new Error(`Failed to fetch cart items: ${itemsError.message}`);
     }
 
-    if (!cartItems || cartItems.length === 0) {
+    if (!rawCartItems || rawCartItems.length === 0) {
       console.error('Cart is empty');
       return new Response(
         JSON.stringify({ error: 'Cart is empty' }),
@@ -215,14 +238,15 @@ serve(async (req) => {
       );
     }
 
+    // Convert raw items to typed items
+    const cartItems = rawCartItems.map(toCartItem);
     console.log(`Found ${cartItems.length} items in cart`);
 
     // Validate stock availability
     const stockErrors: string[] = [];
     for (const item of cartItems) {
-      const typedItem = item as CartItem;
-      if (!typedItem.content || typedItem.content.stock_quantity < typedItem.quantity) {
-        stockErrors.push(`Insufficient stock for ${typedItem.content?.title || 'item'}`);
+      if (!item.content || item.content.stock_quantity < item.quantity) {
+        stockErrors.push(`Insufficient stock for ${item.content?.title || 'item'}`);
       }
     }
 
@@ -256,7 +280,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (discountData) {
-        console.log('Discount found:', discountData);
+        console.log('Discount found');
         const now = new Date();
         const validFrom = discountData.valid_from ? new Date(discountData.valid_from) : null;
         const validUntil = discountData.valid_until ? new Date(discountData.valid_until) : null;
@@ -305,8 +329,6 @@ serve(async (req) => {
       discount_code: discountCodeUsed,
     };
 
-    console.log('Order data:', orderInsertData);
-
     const { data: orderData, error: orderError } = await supabaseAdmin
       .from('orders')
       .insert(orderInsertData)
@@ -331,8 +353,6 @@ serve(async (req) => {
       total_price: item.price * item.quantity,
     }));
 
-    console.log('Order items to insert:', orderItemsToInsert.length);
-
     const { error: orderItemsError } = await supabaseAdmin
       .from('order_items')
       .insert(orderItemsToInsert);
@@ -351,38 +371,36 @@ serve(async (req) => {
     const stockUpdateErrors: string[] = [];
     
     for (const item of cartItems) {
-      const typedItem = item as CartItem;
-      
       // Get current stock
       const { data: contentData, error: fetchError } = await supabaseAdmin
         .from('content')
         .select('stock_quantity')
-        .eq('id', typedItem.content_id)
+        .eq('id', item.content_id)
         .single();
 
       if (fetchError || !contentData) {
         console.error('Failed to fetch content:', fetchError);
-        stockUpdateErrors.push(`Failed to check stock for ${typedItem.content.title}`);
+        stockUpdateErrors.push(`Failed to check stock for ${item.content.title}`);
         continue;
       }
 
-      if (contentData.stock_quantity < typedItem.quantity) {
-        stockUpdateErrors.push(`Insufficient stock for ${typedItem.content.title}`);
+      if (contentData.stock_quantity < item.quantity) {
+        stockUpdateErrors.push(`Insufficient stock for ${item.content.title}`);
         continue;
       }
 
       // Update stock
-      const newStock = contentData.stock_quantity - typedItem.quantity;
+      const newStock = contentData.stock_quantity - item.quantity;
       const { error: stockError } = await supabaseAdmin
         .from('content')
         .update({ stock_quantity: newStock })
-        .eq('id', typedItem.content_id);
+        .eq('id', item.content_id);
 
       if (stockError) {
         console.error('Stock update error:', stockError);
-        stockUpdateErrors.push(`Failed to update stock for ${typedItem.content.title}`);
+        stockUpdateErrors.push(`Failed to update stock for ${item.content.title}`);
       } else {
-        console.log(`Stock updated for ${typedItem.content.title}: ${contentData.stock_quantity} -> ${newStock}`);
+        console.log(`Stock updated for ${item.content.title}: ${contentData.stock_quantity} -> ${newStock}`);
       }
     }
 
@@ -428,16 +446,13 @@ serve(async (req) => {
       customer_info: customer_info,
       shipping_address: shippingAddressText,
       delivery_method: delivery_method,
-      items: cartItems.map(item => {
-        const typedItem = item as CartItem;
-        return {
-          content_id: typedItem.content_id,
-          title: typedItem.content.title,
-          quantity: typedItem.quantity,
-          price: typedItem.price,
-          total: typedItem.price * typedItem.quantity
-        };
-      }),
+      items: cartItems.map(item => ({
+        content_id: item.content_id,
+        title: item.content.title,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.price * item.quantity
+      })),
       message: 'Order created successfully. Proceed to payment.'
     };
 
@@ -451,15 +466,15 @@ serve(async (req) => {
       }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const err = error as Error;
     console.error('=== Checkout Initiate Error ===');
-    console.error('Error:', error);
-    console.error('Stack:', error.stack);
+    console.error('Error:', err.message);
     
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'An unexpected error occurred',
-        details: error.toString()
+        error: err.message || 'An unexpected error occurred',
+        details: err.toString()
       }),
       { 
         status: 500, 

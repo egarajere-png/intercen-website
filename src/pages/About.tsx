@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -51,26 +52,38 @@ const team = [
   {
     name: 'Barack Wandera',
     role: 'Founder & CEO',
+    // expected file: src/assets/team/barack-wandera.jpg
+    image: new URL('../assets/barak.jpeg', import.meta.url).href,
   },
   {
     name: 'Miriam Achiso',
     role: 'Operations Manager',
+    // expected file: src/assets/team/miriam-achiso.jpg
+    image: new URL('../assets/team/miriam-achiso.jpg', import.meta.url).href,
   },
   {
     name: 'Chelangat Naomi',
     role: 'Editorial Director',
+    // expected file: src/assets/team/chelangat-naomi.jpg
+    image: new URL('../assets/chelangatnaomi.jpeg', import.meta.url).href,
   },
   {
     name: 'Robert Mutugi',
     role: 'Design Operations Lead',
+    // expected file: src/assets/team/robert-mutugi.jpg
+    image: new URL('../assets/team/robert-mutugi.jpg', import.meta.url).href,
   },
   {
-    name: 'Kelvin Nyakeriga',
+    name: 'Betty Atiemo',
     role: 'Marketing Lead',
+    // expected file: src/assets/team/betty-atiemo.jpg
+    image: new URL('../assets/bettyatiemo.jpeg', import.meta.url).href,
   },
   {
     name: 'Jere Egara',
-    role: 'IT Lead & Digital Publishing Systems Manager',
+    role: 'Digital Publishing Systems Manager',
+    // expected file: src/assets/team/jere-egara.jpg
+    image: new URL('../assets/bahati.jpeg', import.meta.url).href,
   },
 ];
 
@@ -86,6 +99,8 @@ const translationDocuments = [
 ];
 
 const About = () => {
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+
   return (
     <Layout>
       {/* Hero Section */}
@@ -361,17 +376,29 @@ const About = () => {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {team.map((member, index) => (
-              <div key={index} className="text-center group p-6 rounded-2xl bg-card border hover:shadow-elevated transition-all duration-300">
-                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center mb-4 ring-4 ring-transparent group-hover:ring-primary/30 transition-all">
-                  <span className="font-forum text-2xl text-primary">
-                    {member.name.split(' ').map(n => n[0]).join('')}
-                  </span>
+            {team.map((member, index) => {
+              const initials = member.name.split(' ').map(n => n[0]).join('');
+              const showImage = Boolean(member.image && !failedImages[member.name]);
+
+              return (
+                <div key={index} className="text-center group p-6 rounded-2xl bg-card border hover:shadow-elevated transition-all duration-300">
+                  <div className="w-20 h-20 mx-auto rounded-full overflow-hidden mb-4 ring-4 ring-transparent group-hover:ring-primary/30 transition-all bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+                    {showImage ? (
+                      <img
+                        src={member.image}
+                        alt={`${member.name} photo`}
+                        className="w-full h-full object-cover"
+                        onError={() => setFailedImages(prev => ({ ...prev, [member.name]: true }))}
+                      />
+                    ) : (
+                      <span className="font-forum text-2xl text-primary">{initials}</span>
+                    )}
+                  </div>
+                  <h3 className="font-forum text-lg">{member.name}</h3>
+                  <p className="text-sm text-muted-foreground">{member.role}</p>
                 </div>
-                <h3 className="font-forum text-lg">{member.name}</h3>
-                <p className="text-sm text-muted-foreground">{member.role}</p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
