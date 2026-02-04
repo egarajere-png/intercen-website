@@ -59,7 +59,7 @@ const team = [
     name: 'Miriam Achiso',
     role: 'Operations Manager',
     // expected file: src/assets/team/miriam-achiso.jpg
-    image: new URL('../assets/team/miriam-achiso.jpg', import.meta.url).href,
+    image: new URL('../assets/bettyatiemo.jpeg', import.meta.url).href,
   },
   {
     name: 'Chelangat Naomi',
@@ -77,7 +77,7 @@ const team = [
     name: 'Betty Atiemo',
     role: 'Marketing Lead',
     // expected file: src/assets/team/betty-atiemo.jpg
-    image: new URL('../assets/bettyatiemo.jpeg', import.meta.url).href,
+    image: new URL('../assets/image.png', import.meta.url).href,
   },
   {
     name: 'Jere Egara',

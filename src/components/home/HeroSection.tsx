@@ -17,7 +17,7 @@ export const HeroSection = () => {
           {/* Content */}
           <div className="text-center lg:text-left animate-slide-up">
             <p className="section-subtitle section-subtitle-left text-center lg:text-left">
-              Publishing Excellence Since 2008
+              Publishing Excellence Since 2019
             </p>
 
             <h1 className="headline-1 mb-6">
