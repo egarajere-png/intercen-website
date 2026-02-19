@@ -26,14 +26,14 @@ import whenspeak from "@/assets/whenwespeak.jpg";
 import whispers from "@/assets/whispers.jpg";
 
 export const categories: Category[] = [
-  { id: "1", name: "Fiction", slug: "fiction", bookCount: 245 },
-  { id: "2", name: "Non-Fiction", slug: "non-fiction", bookCount: 189 },
-  { id: "3", name: "Mystery & Thriller", slug: "mystery-thriller", bookCount: 156 },
-  { id: "4", name: "Romance", slug: "romance", bookCount: 203 },
-  { id: "5", name: "Science Fiction", slug: "science-fiction", bookCount: 98 },
-  { id: "6", name: "Biography", slug: "biography", bookCount: 87 },
-  { id: "7", name: "Self-Help", slug: "self-help", bookCount: 124 },
-  { id: "8", name: "Children's Books", slug: "childrens", bookCount: 176 },
+  { id: "1", name: "Fiction", slug: "fiction" },
+  { id: "2", name: "Non-Fiction", slug: "non-fiction" },
+  { id: "3", name: "Mystery & Thriller", slug: "mystery-thriller" },
+  { id: "4", name: "Romance", slug: "romance" },
+  { id: "5", name: "Science Fiction", slug: "science-fiction" },
+  { id: "6", name: "Biography", slug: "biography" },
+  { id: "7", name: "Self-Help", slug: "self-help" },
+  { id: "8", name: "Children's Books", slug: "childrens" },
 ];
 
 export const mockBooks: Book[] = [
