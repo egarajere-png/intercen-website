@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Search, SlidersHorizontal, ChevronDown, Filter, X } from 'lucide-react';
 import { Layout } from '@/components/layout/Layout';
+import { Seo } from '@/components/Seo';
 import { BookCard } from '@/components/books/BookCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,10 +35,10 @@ import { useCart } from '@/contexts/CartContext';
 // Categories with slugs matching the database
 const categories = [
   { id: 'fiction', slug: 'fiction', name: 'Fiction' },
-  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction',  },
-  { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller'},
-  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy'},
-  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction'},
+  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction' },
+  { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller' },
+  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy' },
+  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction' },
   { id: 'academic', slug: 'academic', name: 'Academic & Education' },
   { id: 'business', slug: 'business', name: 'Business & Economics' },
   { id: 'technology', slug: 'technology', name: 'Technology & Programming' },
@@ -82,7 +83,7 @@ const Books = () => {
     const fetchContent = async () => {
       setLoading(true);
       setError(null);
-      
+
       // Build filters for edge function, only include non-empty values
       let filters: any = {};
 
@@ -90,7 +91,7 @@ const Books = () => {
       if (selectedCategories.length === 1) {
         const cat = categories.find(c => c.slug === selectedCategories[0]);
         if (cat) {
-          filters.category_slug = cat.slug; // Changed from category_id to category_slug
+          filters.category_slug = cat.slug;
         }
       }
 
@@ -156,17 +157,17 @@ const Books = () => {
       try {
         // Get the current session
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         // Get Supabase URL from the client
         const supabaseUrl = supabase.supabaseUrl || import.meta.env.VITE_SUPABASE_URL;
-        
+
         if (!supabaseUrl) {
           throw new Error('Supabase URL is not configured');
         }
 
         // Construct the edge function URL
         const edgeFunctionUrl = `${supabaseUrl}/functions/v1/content-search`;
-        
+
         const headers: HeadersInit = {
           'Content-Type': 'application/json',
         };
@@ -192,7 +193,6 @@ const Books = () => {
           let errorText;
           try {
             errorText = await res.text();
-            // Try to parse JSON error
             const json = JSON.parse(errorText);
             errorText = json.error || errorText;
             if (json.details && typeof json.details === 'string') {
@@ -227,13 +227,11 @@ const Books = () => {
     try {
       setAddingToCart(contentId);
 
-      // Find the content item to pass as a book object
       const contentItem = content.find(c => c.id === contentId);
       if (!contentItem) {
         throw new Error('Content not found');
       }
 
-      // Create a book object for CartContext
       const book = {
         id: contentItem.id,
         title: contentItem.title || 'Untitled',
@@ -241,11 +239,9 @@ const Books = () => {
         price: contentItem.price ?? 0,
       };
 
-      // Use CartContext which handles edge function calls
       await addToCartContext(book, quantity);
     } catch (error: any) {
       console.error('Error adding to cart:', error);
-      // Error handling is done in CartContext
     } finally {
       setAddingToCart(null);
     }
@@ -278,11 +274,11 @@ const Books = () => {
     setPage(1);
   };
 
-  const hasActiveFilters = 
-    selectedCategories.length > 0 || 
-    selectedContentTypes.length > 0 || 
-    priceRange !== 'all' || 
-    visibility !== 'all' || 
+  const hasActiveFilters =
+    selectedCategories.length > 0 ||
+    selectedContentTypes.length > 0 ||
+    priceRange !== 'all' ||
+    visibility !== 'all' ||
     searchQuery !== '';
 
   const sortedContent = content;
@@ -315,7 +311,7 @@ const Books = () => {
         <h3 className="font-semibold mb-4 text-foreground">Categories</h3>
         <div className="space-y-3">
           {categories.map(category => (
-              <label
+            <label
               key={category.id}
               className="flex items-center gap-3 cursor-pointer group"
             >
@@ -326,9 +322,6 @@ const Books = () => {
               <span className="text-sm group-hover:text-primary transition-colors">
                 {category.name}
               </span>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  {category.bookCount}
-                </span>
             </label>
           ))}
         </div>
@@ -381,6 +374,12 @@ const Books = () => {
 
   return (
     <Layout>
+      <Seo
+        title="Books | Intercen Books Marketplace"
+        description="Browse and discover books available on Intercen Books. Find your next read from our curated selection of East African literature and more."
+        canonical="https://www.intercenbooks.com/books"
+      />
+
       {/* Page Header */}
       <div className="bg-muted/30 border-b">
         <div className="container py-8 md:py-12">
@@ -572,18 +571,16 @@ const Books = () => {
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
                 <p className="text-sm text-destructive font-medium mb-2">Failed to load content</p>
                 {(() => {
-                  // Try to pretty-print JSON error if possible
                   try {
                     if (error.startsWith('{') || error.startsWith('[')) {
                       const parsed = JSON.parse(error);
                       return (
-                        <pre style={{whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12, color: '#b91c1c', background: '#fef2f2', padding: 8, borderRadius: 4, maxHeight: 300, overflow: 'auto'}}>
+                        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12, color: '#b91c1c', background: '#fef2f2', padding: 8, borderRadius: 4, maxHeight: 300, overflow: 'auto' }}>
                           {JSON.stringify(parsed, null, 2)}
                         </pre>
                       );
                     }
                   } catch {}
-                  // Otherwise, show as plain text
                   return <p className="text-xs text-muted-foreground mb-3">{error}</p>;
                 })()}
                 <Button
@@ -654,15 +651,15 @@ const Books = () => {
                       documentNumber: item.document_number || '',
                       confidentiality: item.confidentiality || '',
                     };
-                    
+
                     return (
                       <div
                         key={book.id}
                         className="animate-fade-in"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <BookCard 
-                          book={book} 
+                        <BookCard
+                          book={book}
                           onAddToCart={handleAddToCart}
                           isAddingToCart={addingToCart === book.id}
                         />
@@ -675,18 +672,18 @@ const Books = () => {
                 {totalPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 pt-8 border-t">
                     <div className="flex items-center gap-2">
-                      <Button 
-                        disabled={page === 1} 
+                      <Button
+                        disabled={page === 1}
                         onClick={() => {
                           setPage(page - 1);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }} 
+                        }}
                         variant="outline"
                         size="sm"
                       >
                         Previous
                       </Button>
-                      
+
                       <div className="flex items-center gap-1">
                         {page > 3 && (
                           <>
@@ -703,7 +700,7 @@ const Books = () => {
                             {page > 4 && <span className="px-2">...</span>}
                           </>
                         )}
-                        
+
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                           const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
                           if (pageNum <= totalPages) {
@@ -723,7 +720,7 @@ const Books = () => {
                           }
                           return null;
                         })}
-                        
+
                         {page < totalPages - 2 && (
                           <>
                             {page < totalPages - 3 && <span className="px-2">...</span>}
@@ -740,20 +737,20 @@ const Books = () => {
                           </>
                         )}
                       </div>
-                      
-                      <Button 
-                        disabled={page === totalPages} 
+
+                      <Button
+                        disabled={page === totalPages}
                         onClick={() => {
                           setPage(page + 1);
                           window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }} 
+                        }}
                         variant="outline"
                         size="sm"
                       >
                         Next
                       </Button>
                     </div>
-                    
+
                     <span className="text-sm text-muted-foreground">
                       Page {page} of {totalPages}
                     </span>

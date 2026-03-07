@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, ShoppingCart, Heart, Share2, Truck, Shield, RotateCcw, Minus, Plus, Loader2 } from 'lucide-react';
+import { Star, ShoppingCart, Heart, Share2, Minus, Plus, Loader2 } from 'lucide-react';
 import Layout from '../components/layout/Layout';
+import { Seo } from '@/components/Seo';
 import BookCard from '../components/books/BookCard';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,7 +13,7 @@ import { supabase } from '../lib/SupabaseClient';
 import ReviewForm from '../components/ReviewForm';
 import ReviewList from '../components/ReviewList';
 
-// Type definition matching the actual database schema
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface ContentItem {
   id: string;
   title: string;
@@ -36,18 +37,18 @@ interface ContentItem {
   stock_quantity: number;
   quantity: number;
   isbn?: string | null;
-  
-  // Feature flags from actual schema
+
+  // Feature flags
   is_featured: boolean;
   is_bestseller: boolean;
   is_new_arrival: boolean;
-  
-  // Metrics from actual schema
+
+  // Metrics
   average_rating: number;
   total_reviews: number;
   total_downloads: number;
   view_count: number;
-  
+
   // Access control
   visibility: string;
   access_level: string;
@@ -58,17 +59,17 @@ interface ContentItem {
   status: string;
   uploaded_by?: string | null;
   organization_id?: string | null;
-  
+
   // Metadata
   meta_keywords?: string[] | null;
   search_vector?: any;
-  
+
   // Timestamps
   created_at: string;
   updated_at: string;
   published_at?: string | null;
-  
-  // Relational data (from join)
+
+  // Relational
   category?: {
     id: string;
     name: string;
@@ -79,15 +80,19 @@ interface ContentItem {
     is_active: boolean;
     sort_order: number;
   };
-  
-  // Computed fields for UI
+
+  // Computed
   original_price?: number;
 }
 
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
+
+// ─── Component ────────────────────────────────────────────────────────────────
 const BookDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [book, setBook] = useState<ContentItem | null>(null);
@@ -95,7 +100,7 @@ const BookDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch book details from database
+  // ── Fetch book details ──────────────────────────────────────────────────────
   useEffect(() => {
     const fetchBookDetails = async () => {
       if (!id) {
@@ -108,7 +113,7 @@ const BookDetail = () => {
         setLoading(true);
         setError(null);
 
-        // Fetch the main book/content item (no join)
+        // Main content item
         const { data: contentData, error: contentError } = await supabase
           .from('content')
           .select('*')
@@ -117,21 +122,14 @@ const BookDetail = () => {
           .eq('visibility', 'public')
           .single();
 
-        if (contentError) {
-          console.error('Error fetching content:', contentError);
+        if (contentError || !contentData) {
           setError('Book not found');
           setLoading(false);
           return;
         }
 
-        if (!contentData) {
-          setError('Book not found');
-          setLoading(false);
-          return;
-        }
-
-        // Fetch category info if category_id exists
-        let category = undefined;
+        // Category for main item
+        let category: ContentItem['category'] | undefined;
         if (contentData.category_id) {
           const { data: categoryData, error: categoryError } = await supabase
             .from('categories')
@@ -143,15 +141,10 @@ const BookDetail = () => {
           }
         }
 
-        // Add computed fields for compatibility
-        const enrichedBook: ContentItem = {
-          ...contentData,
-          category,
-        };
-
+        const enrichedBook: ContentItem = { ...contentData, category };
         setBook(enrichedBook);
 
-        // Fetch related books (same category, no join)
+        // Related books (same category)
         if (contentData.category_id) {
           const { data: relatedData, error: relatedError } = await supabase
             .from('content')
@@ -164,10 +157,9 @@ const BookDetail = () => {
             .limit(4);
 
           if (!relatedError && relatedData) {
-            // Fetch categories for related books in parallel
-            const relatedWithCategory = await Promise.all(
+            const relatedWithCategory: ContentItem[] = await Promise.all(
               relatedData.map(async (item) => {
-                let relCategory = undefined;
+                let relCategory: ContentItem['category'] | undefined;
                 if (item.category_id) {
                   const { data: relCatData, error: relCatError } = await supabase
                     .from('categories')
@@ -178,28 +170,25 @@ const BookDetail = () => {
                     relCategory = relCatData;
                   }
                 }
-                
-                // Ensure proper image URL with fallback
-                const coverImageUrl = item.cover_image_url && item.cover_image_url.trim() !== ''
-                  ? item.cover_image_url
-                  : "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
-                
-                return {
+
+                const enrichedItem: ContentItem = {
                   ...item,
-                  cover_image_url: coverImageUrl,
                   category: relCategory,
-                  original_price: item.price > 0 ? item.price * 1.25 : undefined,
+                  cover_image_url:
+                    item.cover_image_url && item.cover_image_url.trim() !== ''
+                      ? item.cover_image_url
+                      : FALLBACK_IMAGE,
                 };
+                return enrichedItem;
               })
             );
             setRelatedBooks(relatedWithCategory);
           }
         }
-
-        setLoading(false);
       } catch (err) {
         console.error('Unexpected error:', err);
         setError('Failed to load book details');
+      } finally {
         setLoading(false);
       }
     };
@@ -207,6 +196,7 @@ const BookDetail = () => {
     fetchBookDetails();
   }, [id]);
 
+  // ── Guards ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <Layout>
@@ -231,36 +221,76 @@ const BookDetail = () => {
     );
   }
 
-  // Generate image array - only include backpage if it exists and is different from cover
+  // ── Derived values ──────────────────────────────────────────────────────────
   const images = [
-    book.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
-    ...(book.backpage_image_url && book.backpage_image_url !== book.cover_image_url ? [book.backpage_image_url] : [])
+    book.cover_image_url || FALLBACK_IMAGE,
+    ...(book.backpage_image_url && book.backpage_image_url !== book.cover_image_url
+      ? [book.backpage_image_url]
+      : []),
   ];
 
+  const bookTitle = book.title || 'Book Detail';
+  const bookDescription = book.description || 'Read more about this book on Intercen Books.';
+  const canonicalUrl = `https://www.intercenbooks.com/books/${book.id}`;
+
+  // ── JSON-LD structured data for SEO ────────────────────────────────────────
+  const bookJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Book',
+    name: bookTitle,
+    description: bookDescription,
+    url: canonicalUrl,
+    image: book.cover_image_url || FALLBACK_IMAGE,
+    ...(book.author ? { author: { '@type': 'Person', name: book.author } } : {}),
+    ...(book.publisher ? { publisher: { '@type': 'Organization', name: book.publisher } } : {}),
+    ...(book.isbn ? { isbn: book.isbn } : {}),
+    ...(book.published_date ? { datePublished: book.published_date } : {}),
+    ...(book.page_count ? { numberOfPages: book.page_count } : {}),
+    ...(book.language ? { inLanguage: book.language } : {}),
+    ...(book.average_rating > 0
+      ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: book.average_rating.toFixed(1),
+            reviewCount: book.total_reviews,
+          },
+        }
+      : {}),
+    offers: {
+      '@type': 'Offer',
+      price: book.is_free ? '0' : book.price.toFixed(2),
+      priceCurrency: 'KES',
+      availability:
+        book.stock_quantity > 0
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/OutOfStock',
+      url: canonicalUrl,
+    },
+  };
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleAddToCart = () => {
     if (book.stock_quantity === 0) {
       toast.error('This item is out of stock');
       return;
     }
-
     if (!book.is_for_sale) {
       toast.error('This item is not available for purchase');
       return;
     }
-
-    // Transform to cart item format
-    const cartItem = {
-      id: book.id,
-      title: book.title,
-      author: book.author || 'Unknown Author',
-      price: book.price,
-      image: book.cover_image_url || images[0],
-      category: book.category?.name || book.content_type,
-      stock: book.stock_quantity,
-    };
-
-    addToCart(cartItem, quantity);
-    toast.success(`Added ${quantity} x ${book.title} to cart`);
+    addToCart(
+      {
+        id: book.id,
+        title: book.title,
+        author: book.author || 'Unknown Author',
+        price: book.price,
+        image: book.cover_image_url || images[0],
+        category: book.category?.name || book.content_type,
+        stock: book.stock_quantity,
+      },
+      quantity
+    );
+    toast.success(`Added ${quantity} × ${book.title} to cart`);
   };
 
   const handleShare = async () => {
@@ -270,34 +300,41 @@ const BookDetail = () => {
         await navigator.share({
           title: book.title,
           text: book.description || `Check out ${book.title} by ${book.author}`,
-          url: url,
+          url,
         });
       } catch (err) {
         console.error('Error sharing:', err);
       }
     } else {
-      // Fallback: copy to clipboard
       navigator.clipboard.writeText(url);
       toast.success('Link copied to clipboard!');
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <Layout>
+      <Seo
+        title={`${bookTitle} | Intercen Books`}
+        description={bookDescription}
+        canonical={canonicalUrl}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(bookJsonLd) }}
+      />
+
       <div className="container mx-auto px-2 sm:px-4 py-6 sm:py-8">
+
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8">
-          <button onClick={() => navigate('/')} className="hover:text-foreground">
-            Home
-          </button>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-8 flex-wrap">
+          <button onClick={() => navigate('/')} className="hover:text-foreground">Home</button>
           <span>/</span>
-          <button onClick={() => navigate('/shop')} className="hover:text-foreground">
-            Shop
-          </button>
+          <button onClick={() => navigate('/shop')} className="hover:text-foreground">Shop</button>
           <span>/</span>
           {book.category && (
             <>
-              <button 
+              <button
                 onClick={() => navigate(`/shop?category=${book.category?.slug}`)}
                 className="hover:text-foreground"
               >
@@ -311,39 +348,41 @@ const BookDetail = () => {
 
         {/* Main Product Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
-          {/* Image Gallery */}
+
+          {/* ── Image Gallery ── */}
           <div className="space-y-4">
-            {/* Main Image */}
             <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted shadow-card">
               <img
                 src={images[selectedImage]}
                 alt={selectedImage === 0 ? book.title : `${book.title} - Back Page`}
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
-                }}
+                onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
               />
-              
-              {/* Label for back page */}
+
               {selectedImage === 1 && book.backpage_image_url && (
                 <div className="absolute top-4 right-4 bg-white/90 text-xs font-semibold px-3 py-1 rounded-full shadow text-gray-700">
                   Back Page
                 </div>
               )}
 
-              {/* Badges */}
               {book.is_bestseller && (
                 <Badge className="absolute top-4 left-4 bg-secondary text-secondary-foreground">
                   Bestseller
                 </Badge>
               )}
               {book.is_featured && (
-                <Badge className="absolute top-4 left-4 bg-amber-500 text-white" style={{ marginTop: book.is_bestseller ? '40px' : '0' }}>
+                <Badge
+                  className="absolute top-4 left-4 bg-amber-500 text-white"
+                  style={{ marginTop: book.is_bestseller ? '40px' : '0' }}
+                >
                   Featured
                 </Badge>
               )}
               {book.is_new_arrival && (
-                <Badge className="absolute top-4 left-4 bg-blue-500 text-white" style={{ marginTop: (book.is_bestseller || book.is_featured) ? '40px' : '0' }}>
+                <Badge
+                  className="absolute top-4 left-4 bg-blue-500 text-white"
+                  style={{ marginTop: (book.is_bestseller || book.is_featured) ? '40px' : '0' }}
+                >
                   New Arrival
                 </Badge>
               )}
@@ -354,7 +393,6 @@ const BookDetail = () => {
               )}
             </div>
 
-            {/* Thumbnails - only show if multiple images exist */}
             {images.length > 1 && (
               <div className="flex gap-3">
                 {images.map((img, idx) => (
@@ -366,13 +404,11 @@ const BookDetail = () => {
                     }`}
                     aria-label={idx === 0 ? 'Cover Image' : 'Back Page Image'}
                   >
-                    <img 
-                      src={img} 
+                    <img
+                      src={img}
                       alt={idx === 0 ? book.title : `${book.title} - Back Page`}
                       className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400";
-                      }}
+                      onError={(e) => { e.currentTarget.src = FALLBACK_IMAGE; }}
                     />
                     {idx === 1 && book.backpage_image_url && (
                       <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5">
@@ -385,15 +421,13 @@ const BookDetail = () => {
             )}
           </div>
 
-          {/* Book Details */}
+          {/* ── Book Details ── */}
           <div className="space-y-6">
             <div>
               <p className="text-muted-foreground mb-2">
                 {book.category?.name || book.content_type}
               </p>
-              <h1 className="font-serif text-3xl md:text-4xl font-bold mb-3">
-                {book.title}
-              </h1>
+              <h1 className="font-serif text-3xl md:text-4xl font-bold mb-3">{book.title}</h1>
               {book.subtitle && (
                 <p className="text-xl text-muted-foreground mb-2">{book.subtitle}</p>
               )}
@@ -441,12 +475,18 @@ const BookDetail = () => {
             <div className="flex gap-6 text-sm text-muted-foreground">
               {book.view_count > 0 && (
                 <div>
-                  <span className="font-medium text-foreground">{book.view_count.toLocaleString()}</span> views
+                  <span className="font-medium text-foreground">
+                    {book.view_count.toLocaleString()}
+                  </span>{' '}
+                  views
                 </div>
               )}
               {book.total_downloads > 0 && (
                 <div>
-                  <span className="font-medium text-foreground">{book.total_downloads.toLocaleString()}</span> downloads
+                  <span className="font-medium text-foreground">
+                    {book.total_downloads.toLocaleString()}
+                  </span>{' '}
+                  downloads
                 </div>
               )}
             </div>
@@ -473,10 +513,10 @@ const BookDetail = () => {
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
-                
-                <Button 
-                  variant="hero" 
-                  size="lg" 
+
+                <Button
+                  variant="hero"
+                  size="lg"
                   className="flex-1 gap-2 min-w-[150px]"
                   onClick={handleAddToCart}
                   disabled={book.stock_quantity === 0 || !book.is_for_sale}
@@ -489,12 +529,7 @@ const BookDetail = () => {
                   <Button variant="outline" size="lg" className="w-12 px-0">
                     <Heart className="h-5 w-5" />
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="lg" 
-                    className="w-12 px-0"
-                    onClick={handleShare}
-                  >
+                  <Button variant="outline" size="lg" className="w-12 px-0" onClick={handleShare}>
                     <Share2 className="h-5 w-5" />
                   </Button>
                 </div>
@@ -502,62 +537,36 @@ const BookDetail = () => {
             )}
 
             {/* Download button for free items */}
-            {book.is_free && book.access_level === 'free' && (
-              <Button 
-                variant="outline" 
-                size="lg" 
+            {book.is_free && book.access_level === 'free' && book.file_url && (
+              <Button
+                variant="outline"
+                size="lg"
                 className="w-full gap-2 mt-2"
-                onClick={() => window.open(book.file_url, '_blank')}
+                onClick={() => window.open(book.file_url!, '_blank')}
               >
                 Download Now
               </Button>
             )}
-
-            {/* Trust Badges - Commented out
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-6 border-t">
-              <div className="text-center">
-                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center mx-auto mb-2">
-                  <Truck className="h-5 w-5 text-primary" />
-                </div>
-                <p className="text-xs font-medium">Free Delivery</p>
-                <p className="text-xs text-muted-foreground">Over KES 2,000</p>
-              </div>
-              <div className="text-center">
-                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center mx-auto mb-2">
-                  <Shield className="h-5 w-5 text-primary" />
-                </div>
-                <p className="text-xs font-medium">Secure Payment</p>
-                <p className="text-xs text-muted-foreground">M-Pesa & Card</p>
-              </div>
-              <div className="text-center">
-                <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center mx-auto mb-2">
-                  <RotateCcw className="h-5 w-5 text-primary" />
-                </div>
-                <p className="text-xs font-medium">Easy Returns</p>
-                <p className="text-xs text-muted-foreground">14-day policy</p>
-              </div>
-            </div>
-            */}
           </div>
         </div>
 
-        {/* Tabs: Synopsis, Details, Reviews */}
+        {/* ── Tabs ── */}
         <div className="mt-10 sm:mt-12">
           <Tabs defaultValue="synopsis">
             <TabsList className="w-full justify-start border-b rounded-none bg-transparent h-auto p-0 gap-8">
-              <TabsTrigger 
-                value="synopsis" 
+              <TabsTrigger
+                value="synopsis"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary pb-3"
               >
                 Description
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="details"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary pb-3"
               >
                 Details
               </TabsTrigger>
-              <TabsTrigger 
+              <TabsTrigger
                 value="reviews"
                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary pb-3"
               >
@@ -643,15 +652,12 @@ const BookDetail = () => {
                 </div>
               </div>
 
-              {/* Meta Keywords */}
               {book.meta_keywords && book.meta_keywords.length > 0 && (
                 <div className="mt-6">
                   <h3 className="font-semibold mb-3">Tags</h3>
                   <div className="flex flex-wrap gap-2">
                     {book.meta_keywords.map((keyword, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {keyword}
-                      </Badge>
+                      <Badge key={idx} variant="secondary">{keyword}</Badge>
                     ))}
                   </div>
                 </div>
@@ -667,16 +673,16 @@ const BookDetail = () => {
           </Tabs>
         </div>
 
-        {/* Related Books */}
-        {/* {relatedBooks.length > 0 && (
+        {/* ── Related Books ── */}
+        {relatedBooks.length > 0 && (
           <div className="mt-16">
             <h2 className="font-serif text-2xl md:text-3xl font-bold mb-6">
               You May Also Like
             </h2>
             <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {relatedBooks.map(relatedBook => (
-                <BookCard 
-                  key={relatedBook.id} 
+                <BookCard
+                  key={relatedBook.id}
                   book={{
                     id: relatedBook.id,
                     title: relatedBook.title,
@@ -684,17 +690,17 @@ const BookDetail = () => {
                     price: relatedBook.price,
                     rating: relatedBook.average_rating,
                     reviewCount: relatedBook.total_reviews,
-                    // Use the properly validated cover_image_url from the enriched data
-                    image: relatedBook.cover_image_url || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400",
+                    image: relatedBook.cover_image_url || FALLBACK_IMAGE,
                     category: relatedBook.category?.name || relatedBook.content_type,
                     stock: relatedBook.stock_quantity,
                     bestseller: relatedBook.is_bestseller,
-                  }} 
+                  }}
                 />
               ))}
             </div>
           </div>
-        )} */}
+        )}
+
       </div>
     </Layout>
   );

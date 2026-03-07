@@ -71,13 +71,13 @@ const Cart = () => {
       id: 'standard',
       name: 'Standard Delivery',
       cost: 500,
-      estimatedDays: '3-5 business days',
+      estimatedDays: '1-3 business days',
       description: 'Regular delivery within city'
     },
     {
       id: 'express',
       name: 'Express Delivery',
-      cost: 1000,
+      cost: 200,
       estimatedDays: '1-2 business days',
       description: 'Fast delivery within city'
     },
@@ -328,7 +328,7 @@ const Cart = () => {
               <h2 className="text-2xl font-semibold mb-2">Your cart is empty</h2>
               <p className="text-gray-600 mb-6">Add some items to get started!</p>
               <Link
-                to="/shop"
+                to="/books"
                 className="inline-block bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary/90 transition"
               >
                 Browse Books
