@@ -109,15 +109,47 @@ const Cart = () => {
   const fetchCart = async () => {
     try {
       setLoading(true);
-      
-      // Use GET method for cart-get
-      const { data, error } = await supabase.functions.invoke('cart-get', {
-        method: 'GET'
-      });
-      
-      if (error) throw error;
-      
-      setCartItems(data?.items || []);
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        setCartItems([]);
+        return;
+      }
+
+      // First get the user's active cart
+      const { data: cart, error: cartError } = await supabase
+        .from('carts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .single();
+
+      if (cartError || !cart) {
+        setCartItems([]);
+        return;
+      }
+
+      // Then get the cart items with content details
+      const { data: items, error: itemsError } = await supabase
+        .from('cart_items')
+        .select(`
+          id,
+          content_id,
+          quantity,
+          price,
+          content:contents (
+            title,
+            author,
+            cover_image_url,
+            stock_quantity
+          )
+        `)
+        .eq('cart_id', cart.id);
+
+      if (itemsError) throw itemsError;
+
+      setCartItems(items || []);
     } catch (error) {
       console.error('Error fetching cart:', error);
     } finally {
@@ -132,34 +164,47 @@ const Cart = () => {
     }
 
     try {
-      const { error } = await supabase.functions.invoke('cart-update-quantity', {
-        body: { cart_item_id: itemId, quantity: newQuantity }
-      });
-      
+      // Optimistic UI update
+      setCartItems(prev =>
+        prev.map(item =>
+          item.id === itemId ? { ...item, quantity: newQuantity } : item
+        )
+      );
+
+      const { error } = await supabase
+        .from('cart_items')
+        .update({ quantity: newQuantity })
+        .eq('id', itemId);
+
       if (error) throw error;
-      
-      await fetchCart();
+
     } catch (error) {
       console.error('Error updating quantity:', error);
+      // Revert optimistic update on failure
+      await fetchCart();
     }
   };
 
   const removeItem = async (itemId: string) => {
     try {
-      const { error } = await supabase.functions.invoke('cart-remove-item', {
-        body: { cart_item_id: itemId }
-      });
-      
+      // Optimistic UI update
+      setCartItems(prev => prev.filter(item => item.id !== itemId));
+
+      const { error } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('id', itemId);
+
       if (error) throw error;
-      
-      await fetchCart();
+
     } catch (error) {
       console.error('Error removing item:', error);
+      // Revert optimistic update on failure
+      await fetchCart();
     }
   };
 
   const applyDiscount = () => {
-    // Mock discount logic
     if (discountCode.toUpperCase() === 'SAVE10') {
       setAppliedDiscount({
         code: 'SAVE10',
@@ -199,7 +244,6 @@ const Cart = () => {
     try {
       setIsProcessing(true);
 
-      // Get the current session with access token
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError || !session) {
@@ -208,7 +252,6 @@ const Cart = () => {
         return;
       }
 
-      // Prepare checkout data
       const checkoutData = {
         customer_info: {
           fullName: customerInfo.fullName,
@@ -226,7 +269,6 @@ const Cart = () => {
 
       console.log('Initiating checkout with data:', checkoutData);
 
-      // Call the edge function with proper authorization
       const { data, error } = await supabase.functions.invoke('checkout-initiate', {
         body: checkoutData,
         headers: {
@@ -248,7 +290,6 @@ const Cart = () => {
 
       console.log('Order created successfully:', data);
 
-      // Success - show on-screen modal instead of alert
       setOrderConfirmation({
         open: true,
         orderNumber: data.order_number,
@@ -543,26 +584,6 @@ const Cart = () => {
                         <span>Total</span>
                         <span className="text-primary">KSh {total.toLocaleString()}</span>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Discount Code */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium mb-2">Discount Code</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={discountCode}
-                        onChange={(e) => setDiscountCode(e.target.value)}
-                        className="flex-1 px-3 py-2 border rounded-lg"
-                        placeholder="Enter code"
-                      />
-                      <button
-                        onClick={applyDiscount}
-                        className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium"
-                      >
-                        Apply
-                      </button>
                     </div>
                   </div>
 
