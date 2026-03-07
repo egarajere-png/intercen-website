@@ -161,9 +161,11 @@ const ProductsServices = () => {
               From manuscript to marketplace, we provide everything you need to 
               publish, print, and promote your books successfully.
             </p>
-            <Button variant="hero" size="xl" className="gap-2">
-              Get a Quote
-              <ArrowRight className="h-5 w-5" />
+            <Button asChild variant="hero" size="xl" className="gap-2">
+              <a href="mailto:info.intercenbooks@gmail.com?subject=Quotation Inquiry">
+                Get a Quote
+                <ArrowRight className="h-5 w-5" />
+              </a>
             </Button>
           </div>
         </div>
@@ -258,10 +260,13 @@ const ProductsServices = () => {
                     ))}
                   </ul>
                   <Button 
+                    asChild
                     className="w-full" 
                     variant={pkg.highlighted ? 'default' : 'outline'}
                   >
-                    Choose {pkg.name}
+                    <a href={`mailto:info.intercenbooks@gmail.com?subject=${pkg.name} Package Inquiry`}>
+                      Choose {pkg.name}
+                    </a>
                   </Button>
                 </CardContent>
               </Card>
@@ -322,10 +327,10 @@ const ProductsServices = () => {
                 </div>
               </div>
               
-              <Button variant="default" size="lg" className="gap-2">
+              {/* <Button variant="default" size="lg" className="gap-2">
                 View Upcoming Programs
                 <ArrowRight className="h-4 w-4" />
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>

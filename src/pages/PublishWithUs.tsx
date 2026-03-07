@@ -110,16 +110,16 @@ const PublishWithUs = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild variant="hero" size="xl" className="gap-2">
-                <Link to="/upload#top">
+                <a href="mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission">
                   <FileText className="h-5 w-5" />
                   Submit Your Manuscript
-                </Link>
+                </a>
               </Button>
               <Button asChild variant="hero-outline" size="xl" className="gap-2">
-                <Link to="/upload#top">
+                <a href="mailto:info.intercenbooks@gmail.com?subject=Vendor Partnership Inquiry">
                   <Users className="h-5 w-5" />
                   Become a Vendor
-                </Link>
+                </a>
               </Button>
             </div>
           </div>
@@ -173,10 +173,10 @@ const PublishWithUs = () => {
                     ))}
                   </ul>
                   <Button asChild variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <Link to="/upload#top">
+                    <a href={index === 2 ? "mailto:info.intercenbooks@gmail.com?subject=Vendor Partnership Inquiry" : "mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission"}>
                       {option.cta}
                       <ArrowRight className="h-4 w-4 ml-2" />
-                    </Link>
+                    </a>
                   </Button>
                 </CardContent>
               </Card>
@@ -297,10 +297,10 @@ const PublishWithUs = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button asChild variant="gold" size="xl" className="gap-2">
-                <Link to="/upload#top">
+                <a href="mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission">
                   <Send className="h-5 w-5" />
                   Submit Manuscript
-                </Link>
+                </a>
               </Button>
               <Button variant="outline" size="xl" className="border-white/30 text-white hover:bg-white/10">
                 Contact Us

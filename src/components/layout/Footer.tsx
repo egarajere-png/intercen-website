@@ -108,20 +108,20 @@ export const Footer = () => {
               <li className="flex items-start gap-3">
                 <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <span className="text-white/70 text-sm">
-                  123 Book Street, Library District<br />
-                  Nairobi, Kenya
+                  Mumias Road, Bungoma<br />
+                  Bungoma, Kenya
                 </span>
               </li>
               <li className="flex items-center gap-3">
                 <Phone className="h-5 w-5 text-primary shrink-0" />
                 <a href="tel:+254700000000" className="text-white/70 hover:text-primary text-sm">
-                  +254 700 000 000
+                  +254 785 174 184
                 </a>
               </li>
               <li className="flex items-center gap-3">
                 <Mail className="h-5 w-5 text-primary shrink-0" />
-                <a href="mailto:hello@intercenbooks.com" className="text-white/70 hover:text-primary text-sm">
-                  hello@intercenbooks.com
+                <a href="mailto:info.intercenbooks@gmail.com" className="text-white/70 hover:text-primary text-sm">
+                  info.intercenbooks@gmail.com
                 </a>
               </li>
             </ul>

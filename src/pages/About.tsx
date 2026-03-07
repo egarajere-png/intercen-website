@@ -353,9 +353,11 @@ const About = () => {
                 <p className="text-sm text-muted-foreground mb-4">
                   We guarantee exceptional quality and timely delivery of all translated materials.
                 </p>
-                <Button variant="default" className="gap-2">
-                  Request Translation Quote
-                  <ArrowRight className="h-4 w-4" />
+                <Button asChild variant="default" className="gap-2">
+                  <a href="mailto:info.intercenbooks@gmail.com?subject=Translation Quote Inquiry">
+                    Request Translation Quote
+                    <ArrowRight className="h-4 w-4" />
+                  </a>
                 </Button>
               </div>
             </div>
