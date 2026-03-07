@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
+import { HelmetProvider } from "react-helmet-async";
 import { CartProvider } from "@/contexts/CartContext";
 import { PageTransition } from "@/components/layout/PageTransition";
 
@@ -70,67 +71,64 @@ const App = () => {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <CartProvider>
-          <Toaster />
-          <Sonner />
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <CartProvider>
+            <Toaster />
+            <Sonner />
 
-          <BrowserRouter>
-            <PageTransition>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/books" element={<Books />} />
-                <Route path="/books/:id" element={<BookDetail />} />
-                <Route path="/cart" element={<Cart />} />
-                
-                {/* Payment Routes */}
-                <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
-                <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
-                <Route path="/payment-success" element={<PaymentConfirmationPage />} />
-                <Route path="/payment-failed" element={<PaymentConfirmationPage />} />
-                <Route path="/payment-cancelled" element={<PaymentConfirmationPage />} />
-                <Route path="/payment-pending" element={<PaymentConfirmationPage />} />
-                <Route path="/payment-status" element={<PaymentConfirmationPage />} />
-                
-                {/* Other Pages */}
-                <Route path="/about" element={<About />} />
-                <Route path="/publish" element={<PublishWithUs />} />
-                <Route path="/services" element={<ProductsServices />} />
-                
-                {/* Auth Routes */}
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/signin" element={<Auth />} />
-                <Route path="/login" element={<Auth />} />
-                <Route path="/profile-setup" element={<ProfileSetup />} />
-                <Route path="/profile" element={<Profile />} />
-                <Route
-                  path="/reset-password"
-                  element={
-                    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                      <PasswordChange />
-                    </Suspense>
-                  }
-                />
-                
-                {/* Content Management Routes */}
-                <Route path="/upload" element={<ContentUpload />} />
-                <Route path="/content-management" element={<ContentManagement />} />
-                <Route path="/content/:id" element={<ContentViewPage />} />
-                <Route path="/content/update/:id" element={<ContentUpdatePage />} />
-                <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
-                <Route path="/content/delete/:id" element={<ContentDeletePage />} />
-                <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
-                <Route path="/content-search" element={<ContentSearch />} />
-
-                {/* Catch-all route should be last */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </PageTransition>
-          </BrowserRouter>
-        </CartProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+            <BrowserRouter>
+              <PageTransition>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/books" element={<Books />} />
+                  <Route path="/books/:id" element={<BookDetail />} />
+                  <Route path="/cart" element={<Cart />} />
+                  {/* Payment Routes */}
+                  <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
+                  <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
+                  <Route path="/payment-success" element={<PaymentConfirmationPage />} />
+                  <Route path="/payment-failed" element={<PaymentConfirmationPage />} />
+                  <Route path="/payment-cancelled" element={<PaymentConfirmationPage />} />
+                  <Route path="/payment-pending" element={<PaymentConfirmationPage />} />
+                  <Route path="/payment-status" element={<PaymentConfirmationPage />} />
+                  {/* Other Pages */}
+                  <Route path="/about" element={<About />} />
+                  <Route path="/publish" element={<PublishWithUs />} />
+                  <Route path="/services" element={<ProductsServices />} />
+                  {/* Auth Routes */}
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/signin" element={<Auth />} />
+                  <Route path="/login" element={<Auth />} />
+                  <Route path="/profile-setup" element={<ProfileSetup />} />
+                  <Route path="/profile" element={<Profile />} />
+                  <Route
+                    path="/reset-password"
+                    element={
+                      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+                        <PasswordChange />
+                      </Suspense>
+                    }
+                  />
+                  {/* Content Management Routes */}
+                  <Route path="/upload" element={<ContentUpload />} />
+                  <Route path="/content-management" element={<ContentManagement />} />
+                  <Route path="/content/:id" element={<ContentViewPage />} />
+                  <Route path="/content/update/:id" element={<ContentUpdatePage />} />
+                  <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
+                  <Route path="/content/delete/:id" element={<ContentDeletePage />} />
+                  <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
+                  <Route path="/content-search" element={<ContentSearch />} />
+                  {/* Catch-all route should be last */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </PageTransition>
+            </BrowserRouter>
+          </CartProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 };
 
