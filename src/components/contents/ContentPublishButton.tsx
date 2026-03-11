@@ -37,7 +37,7 @@ export function ContentPublishButton({
   const [pendingAction, setPendingAction] = useState<'publish' | 'unpublish' | null>(null);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
 
-  const isPublished = currentStatus === 'published';
+  // const isPublished = currentStatus === 'published';
 
   const handleAction = async (action: 'publish' | 'unpublish') => {
     setLoading(true);
@@ -86,9 +86,13 @@ export function ContentPublishButton({
         onStatusChange(result.content.status);
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Action failed:', err);
-      toast.error(err.message || `Failed to ${action} content`);
+      if (err instanceof Error) {
+        toast.error(err.message || `Failed to ${action} content`);
+      } else {
+        toast.error(`Failed to ${action} content`);
+      }
     } finally {
       setLoading(false);
       setShowDialog(false);

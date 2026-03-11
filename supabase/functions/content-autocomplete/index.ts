@@ -292,7 +292,7 @@ async function getPopularSearches(
       return await getPopularSearchesDirect(supabase, query, limit);
     }
 
-    return (data || []).map((item: any) => ({
+    return (data || []).map((item: { tag_name: string; tag_slug: string; usage_count: number }) => ({
       type: 'popular' as const,
       value: item.search_query,
       count: item.search_count,
@@ -321,7 +321,7 @@ async function getPopularSearchesDirect(
     if (error || !data) return [];
 
     const counts = new Map<string, number>();
-    data.forEach((item: any) => {
+    data.forEach((item: { author: string }) => {
       const q = item.search_query.toLowerCase().trim();
       counts.set(q, (counts.get(q) || 0) + 1);
     });
@@ -403,7 +403,7 @@ async function getTrendingTags(
       return await getTrendingTagsDirect(supabase, query, limit);
     }
 
-    return (data || []).map((item: any) => ({
+    return (data || []).map((item: { search_query: string; search_count: number }) => ({
       type: 'tag' as const,
       value: item.tag_name,
       slug: item.tag_slug,
@@ -493,8 +493,8 @@ async function getPersonalizedSuggestions(
     ).join(',');
 
     const { data, error } = await supabase
-      .from("content")
-      .select("id, title, cover_image_url, content_type")
+    .from("content")
+    .select("id, title, cover_image_url, content_type")
       .eq("status", "published")
       .eq("visibility", "public")
       .or(orConditions)
@@ -525,8 +525,8 @@ async function getSpellingCorrection(
   try {
     // Get popular search terms to check against
     const { data, error } = await supabase
-      .from("search_logs")
-      .select("search_query")
+    .from("search_logs")
+    .select("search_query")
       .not("search_query", "is", null)
       .limit(1000);
 
@@ -534,7 +534,7 @@ async function getSpellingCorrection(
 
     // Build a set of known terms
     const knownTerms = new Set<string>();
-    data.forEach((item: any) => {
+    data.forEach((item: { search_query: string }) => {
       if (item.search_query) {
         knownTerms.add(item.search_query.toLowerCase().trim());
       }
@@ -618,7 +618,8 @@ async function getDefaultSuggestions(
         .select("search_query, created_at")
         .eq("user_id", userId)
         .not("search_query", "is", null)
-        .not("search_query", "eq", "")
+    .from("search_logs")
+    .select("search_query, created_at")
         .order("created_at", { ascending: false })
         .limit(3);
 
@@ -637,7 +638,7 @@ async function getDefaultSuggestions(
         });
       }
     }
-
+      suggestions.push({
     // Get top viewed content
     const { data: topContent } = await supabase
       .from("content")
@@ -663,7 +664,7 @@ async function getDefaultSuggestions(
     }
 
     // Get top tags
-    const { data: topTags } = await supabase
+      .map((tag: { name: string; slug: string; content_tags?: any[] }) => ({
       .from("tags")
       .select(`
         id,
@@ -675,7 +676,7 @@ async function getDefaultSuggestions(
 
     if (topTags) {
       topTags
-        .map((tag: any) => ({
+        .map((tag: { name: string; slug: string; content_tags?: any[] }) => ({
           type: 'tag' as const,
           value: tag.name,
           slug: tag.slug,
