@@ -34,7 +34,7 @@ import ContentSearch from "./pages/ContentSearch";
 import React, { Suspense, useEffect } from "react";
 import { supabase } from "@/lib/SupabaseClient";
 
-const PasswordChange = React.lazy(() => import("./pages/PasswordChange"));
+const ResetPassword = React.lazy(() => import("./pages/ResetPassword"));
 
 const queryClient = new QueryClient();
 
@@ -107,7 +107,7 @@ const App = () => {
                     path="/reset-password"
                     element={
                       <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                        <PasswordChange />
+                        <ResetPassword />
                       </Suspense>
                     }
                   />
