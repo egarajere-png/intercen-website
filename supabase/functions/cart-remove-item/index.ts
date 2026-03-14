@@ -204,15 +204,12 @@ serve(async (req) => {
       throw fetchCartError;
     }
 
-    // Calculate cart totals - handle items as any[] due to Supabase join typing
-    const rawItems = (updatedCart.items || []) as unknown[];
-    const itemsWithSubtotals = rawItems.map((item: unknown) => {
-      const typedItem = item as { price: number; quantity: number };
-      return {
-        ...typedItem,
-        item_subtotal: Number(typedItem.price) * typedItem.quantity,
-      };
-    });
+    // Calculate cart totals
+    const cartItems = (updatedCart.items || []) as CartItemDetail[];
+    const itemsWithSubtotals = cartItems.map((item) => ({
+      ...item,
+      item_subtotal: Number(item.price) * item.quantity,
+    }));
 
     const subtotal = itemsWithSubtotals.reduce(
       (sum, item) => sum + item.item_subtotal,
@@ -226,8 +223,8 @@ serve(async (req) => {
 
     const response: CartWithItems = {
       ...updatedCart,
-      items: itemsWithSubtotals as CartItemDetail[],
-      subtotal: Math.round(subtotal * 100) / 100,
+      items: itemsWithSubtotals,
+      subtotal: Math.round(subtotal * 100) / 100, // Round to 2 decimal places
       total_items: totalItems,
     };
 
@@ -235,14 +232,13 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error("Error in cart-remove-item function:", err);
+  } catch (error) {
+    console.error("Error in cart-remove-item function:", error);
 
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
-        message: err.message || "An unexpected error occurred",
+        message: error.message || "An unexpected error occurred",
       }),
       {
         status: 500,

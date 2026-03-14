@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface SearchFilters {
   category_id?: string;
+  category_slug?: string;
   content_type?: string;
   content_types?: string[];
   price_min?: number;
@@ -32,6 +33,12 @@ interface SearchResponse {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+// Helper function to validate UUID format
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
 }
 
 serve(async (req) => {
@@ -78,6 +85,53 @@ serve(async (req) => {
     // Validate pagination parameters
     const validatedPage = Math.max(1, page);
     const validatedPageSize = Math.min(Math.max(1, page_size), 100); // Max 100 items per page
+
+    // Handle category filter - intelligently support both UUID and slug
+    let resolvedCategoryId: string | null = null;
+    
+    if (filters.category_slug) {
+      // Explicit slug provided
+      const { data: category, error: categoryError } = await supabaseClient
+        .from("categories")
+        .select("id")
+        .eq("slug", filters.category_slug)
+        .eq("is_active", true)
+        .single();
+      
+      if (categoryError || !category) {
+        throw new Error(`Category not found with slug: "${filters.category_slug}"`);
+      }
+      
+      resolvedCategoryId = category.id;
+    } else if (filters.category_id) {
+      // Check if category_id is a valid UUID
+      if (isValidUUID(filters.category_id)) {
+        // It's a valid UUID, use it directly
+        resolvedCategoryId = filters.category_id;
+      } else {
+        // Not a UUID, treat it as a slug or numeric ID that needs lookup
+        // First, try to find by slug
+        const { data: categoryBySlug } = await supabaseClient
+          .from("categories")
+          .select("id")
+          .eq("slug", filters.category_id)
+          .eq("is_active", true)
+          .single();
+        
+        if (categoryBySlug) {
+          resolvedCategoryId = categoryBySlug.id;
+        } else {
+          // If it's a number, we could have a legacy numeric ID situation
+          // In this case, we'll just skip the filter or throw an error
+          console.warn(`Category not found for identifier: "${filters.category_id}"`);
+          // Option 1: Skip the filter silently
+          // resolvedCategoryId = null;
+          
+          // Option 2: Throw error (current approach)
+          throw new Error(`Category not found. Please provide a valid category UUID or slug. Received: "${filters.category_id}"`);
+        }
+      }
+    }
 
     // Build the base query - ALWAYS filter for published content first
     let queryBuilder = supabaseClient
@@ -136,9 +190,9 @@ serve(async (req) => {
     }
 
     // Apply other filters
-    // Category filter
-    if (filters.category_id) {
-      queryBuilder = queryBuilder.eq("category_id", filters.category_id);
+    // Category filter - use resolved category ID
+    if (resolvedCategoryId) {
+      queryBuilder = queryBuilder.eq("category_id", resolvedCategoryId);
     }
 
     // Content type filter - support both single and multiple types

@@ -1,6 +1,6 @@
 // supabase/functions/content-update/index.ts
-import { createClient } from '@supabase/supabase-js';
-import { multiParser, FormFile } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
+import { createClient } from 'npm:@supabase/supabase-js@2';
+import { multiParser } from 'https://deno.land/x/multiparser@0.114.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,101 +10,21 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const MAX_CONTENT_SIZE = 100 * 1024 * 1024 // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024 // 10MB
-
-const ALLOWED_CONTENT_MIMES = [
-  'application/pdf',
-  'application/epub+zip',
-  'application/x-mobipocket-ebook',
-  'application/vnd.amazon.ebook',
-  'application/msword',
-  'application/vnd.ms-excel',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.oasis.opendocument.text',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  'application/vnd.oasis.opendocument.presentation',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'text/html',
-  'application/xhtml+xml',
-  'application/zip',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024 // 10MB
 
 const ALLOWED_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
-const validContentExtensions = [
-  'pdf', 'epub', 'mobi', 'azw', 'azw3', 'doc', 'docx', 'xls', 'xlsx',
-  'ppt', 'pptx', 'odt', 'ods', 'odp', 'txt', 'md', 'markdown', 'csv',
-  'html', 'htm', 'xhtml', 'zip', 'jpg', 'jpeg', 'png', 'webp'
-]
-
 const validCoverExtensions = ['jpg', 'jpeg', 'png', 'webp']
 
-const formatMap: Record<string, string> = {
-  'pdf': 'pdf', 'doc': 'doc', 'docx': 'docx', 'txt': 'txt',
-  'md': 'markdown', 'markdown': 'markdown', 'xls': 'xls', 'xlsx': 'xlsx',
-  'csv': 'csv', 'ods': 'ods', 'ppt': 'ppt', 'pptx': 'pptx', 'odp': 'odp',
-  'epub': 'epub', 'mobi': 'mobi', 'azw': 'azw', 'azw3': 'azw3',
-  'html': 'html', 'htm': 'html', 'xhtml': 'xhtml', 'odt': 'odt',
-  'zip': 'zip', 'jpg': 'jpg', 'jpeg': 'jpeg', 'png': 'png', 'webp': 'webp',
-}
-
 const mimeMap: Record<string, string> = {
-  pdf: 'application/pdf',
-  epub: 'application/epub+zip',
-  mobi: 'application/x-mobipocket-ebook',
-  azw: 'application/vnd.amazon.ebook',
-  azw3: 'application/vnd.amazon.ebook',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ppt: 'application/vnd.ms-powerpoint',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  odt: 'application/vnd.oasis.opendocument.text',
-  ods: 'application/vnd.oasis.opendocument.spreadsheet',
-  odp: 'application/vnd.oasis.opendocument.presentation',
-  txt: 'text/plain',
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  csv: 'text/csv',
-  html: 'text/html',
-  htm: 'text/html',
-  xhtml: 'application/xhtml+xml',
-  zip: 'application/zip',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
 }
 
-const getFormatFromFilename = (filename: string): string => {
-  const ext = filename.split('.').pop()?.toLowerCase() || ''
-  return formatMap[ext] || ext || 'unknown'
-}
-
-const getStorageBucket = (contentType: string, mimeType: string): string => {
-  if (['book', 'ebook'].includes(contentType.toLowerCase())) return 'book-files'
-  if (mimeType.startsWith('image/')) return 'manuscripts'
-  if (contentType.toLowerCase().includes('manuscript')) return 'manuscripts'
-  return 'documets'
-}
-
-// Helper to get a single FormFile from possibly array
-const getSingleFile = (file: FormFile | FormFile[] | undefined): FormFile | undefined => {
-  if (!file) return undefined
-  return Array.isArray(file) ? file[0] : file
-}
-
-Deno.serve(async (req): Promise<Response> => {
+Deno.serve(async (req) => {
   try {
     console.log('=== CONTENT UPDATE FUNCTION START ===')
     
@@ -147,10 +67,9 @@ Deno.serve(async (req): Promise<Response> => {
     let form
     try {
       form = await multiParser(req)
-    } catch (e: unknown) {
-      const parseErr = e as Error
-      console.error('Parse error:', parseErr.message)
-      return new Response(JSON.stringify({ error: 'Failed to parse form', details: parseErr.message }), {
+    } catch (e) {
+      console.error('Parse error:', e.message)
+      return new Response(JSON.stringify({ error: 'Failed to parse form', details: e.message }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -195,6 +114,7 @@ Deno.serve(async (req): Promise<Response> => {
     let hasPermission = existingContent.uploaded_by === user.id
 
     if (!hasPermission && existingContent.organization_id) {
+      // Check if user is admin of the organization
       const { data: orgMember } = await supabaseAdmin
         .from('organization_members')
         .select('role')
@@ -216,140 +136,38 @@ Deno.serve(async (req): Promise<Response> => {
 
     console.log('Permission granted')
 
-    // Handle file replacement if new file provided
-    const newContentFile = getSingleFile(form.files?.content_file)
-    const newCoverFile = getSingleFile(form.files?.cover_image)
-    let new_file_url = existingContent.file_url
+    // Handle image replacements
+    const newCoverFile = form.files?.cover_image
+    const newBackpageFile = form.files?.backpage_image
     let new_cover_url = existingContent.cover_image_url
-    let new_format = existingContent.format
-    let new_file_size = existingContent.file_size_bytes
-
-    if (newContentFile) {
-      console.log('New content file detected, validating...')
-
-      const contentExt = newContentFile.filename.split('.').pop()?.toLowerCase() || ''
-      const contentType = (newContentFile as any).contentType || (newContentFile as any).type || ''
-      const isValidContentMime = contentType && ALLOWED_CONTENT_MIMES.includes(contentType)
-      const isValidContentExt = validContentExtensions.includes(contentExt)
-
-      if (!isValidContentMime && !isValidContentExt) {
-        return new Response(JSON.stringify({
-          error: 'Invalid content file type',
-          received_type: contentType || 'undefined',
-          received_extension: contentExt,
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      const fileSize = newContentFile.content.length
-      if (fileSize > MAX_CONTENT_SIZE) {
-        return new Response(JSON.stringify({
-          error: 'File too large',
-          size: `${(fileSize / 1024 / 1024).toFixed(2)}MB`,
-          limit: '100MB'
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      // Determine bucket and MIME type
-      const content_type_field = (f.content_type as string)?.trim() || existingContent.content_type
-      new_format = getFormatFromFilename(newContentFile.filename)
-      const storageBucket = getStorageBucket(content_type_field, contentType)
-
-      let effectiveContentMime = contentType
-      if (!effectiveContentMime || !ALLOWED_CONTENT_MIMES.includes(effectiveContentMime)) {
-        effectiveContentMime = mimeMap[contentExt] || 'application/octet-stream'
-      }
-
-      // Upload new file
-      const ext = contentExt || new_format
-      const contentPath = `${user.id}/${crypto.randomUUID()}.${ext}`
-
-      console.log('Uploading new file to bucket:', storageBucket)
-
-      const { error: uploadErr } = await supabaseAdmin.storage
-        .from(storageBucket)
-        .upload(contentPath, newContentFile.content, {
-          contentType: effectiveContentMime,
-          upsert: false,
-        })
-
-      if (uploadErr) {
-        console.error('Upload error:', uploadErr)
-        return new Response(JSON.stringify({
-          error: 'Upload failed',
-          details: uploadErr.message,
-          bucket: storageBucket
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      const { data: { publicUrl } } = supabaseAdmin.storage
-        .from(storageBucket)
-        .getPublicUrl(contentPath)
-
-      new_file_url = publicUrl
-      new_file_size = fileSize
-
-      console.log('New file uploaded:', new_file_url)
-
-      // Create version history entry
-      try {
-        const currentVersion = parseFloat(existingContent.version || '1.0')
-        const newVersion = (currentVersion + 0.1).toFixed(1)
-
-        await supabaseAdmin
-          .from('content_version_history')
-          .insert({
-            content_id: content_id,
-            version_number: existingContent.version || '1.0',
-            file_url: existingContent.file_url,
-            file_size_bytes: existingContent.file_size_bytes,
-            format: existingContent.format,
-            changed_by: user.id,
-            change_summary: 'File replacement',
-          })
-
-        console.log('Version history created for version:', existingContent.version)
-      } catch (versionErr) {
-        console.warn('Failed to create version history:', versionErr)
-      }
-    }
+    let new_backpage_url = existingContent.backpage_image_url
 
     // Handle cover image replacement
     if (newCoverFile) {
       console.log('New cover image detected')
 
       const coverExt = newCoverFile.filename.split('.').pop()?.toLowerCase() || 'jpg'
-      const coverType = (newCoverFile as any).contentType || (newCoverFile as any).type || ''
-      const isValidCoverMime = coverType && ALLOWED_COVER_MIMES.includes(coverType)
+      const isValidCoverMime = newCoverFile.type && ALLOWED_COVER_MIMES.includes(newCoverFile.type)
       const isValidCoverExt = validCoverExtensions.includes(coverExt)
 
       if (!isValidCoverMime && !isValidCoverExt) {
         return new Response(JSON.stringify({
           error: 'Invalid cover image type',
-          received_type: coverType || 'undefined',
+          received_type: newCoverFile.type || 'undefined',
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      const coverSize = newCoverFile.content.length
-      if (coverSize > MAX_COVER_SIZE) {
-        return new Response(JSON.stringify({ error: 'Cover too large' }), {
+      if (newCoverFile.length > MAX_COVER_SIZE) {
+        return new Response(JSON.stringify({ error: 'Cover too large (max 10MB)' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
       }
 
-      let effectiveCoverMime = coverType
+      let effectiveCoverMime = newCoverFile.type
       if (!effectiveCoverMime || !ALLOWED_COVER_MIMES.includes(effectiveCoverMime)) {
         effectiveCoverMime = mimeMap[coverExt] || 'image/jpeg'
       }
@@ -374,8 +192,58 @@ Deno.serve(async (req): Promise<Response> => {
       }
     }
 
+    // Handle backpage image replacement
+    if (newBackpageFile) {
+      console.log('New backpage image detected')
+
+      const backpageExt = newBackpageFile.filename.split('.').pop()?.toLowerCase() || 'jpg'
+      const isValidBackpageMime = newBackpageFile.type && ALLOWED_COVER_MIMES.includes(newBackpageFile.type)
+      const isValidBackpageExt = validCoverExtensions.includes(backpageExt)
+
+      if (!isValidBackpageMime && !isValidBackpageExt) {
+        return new Response(JSON.stringify({
+          error: 'Invalid backpage image type',
+          received_type: newBackpageFile.type || 'undefined',
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      if (newBackpageFile.length > MAX_BACKPAGE_SIZE) {
+        return new Response(JSON.stringify({ error: 'Backpage image too large (max 10MB)' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        })
+      }
+
+      let effectiveBackpageMime = newBackpageFile.type
+      if (!effectiveBackpageMime || !ALLOWED_COVER_MIMES.includes(effectiveBackpageMime)) {
+        effectiveBackpageMime = mimeMap[backpageExt] || 'image/jpeg'
+      }
+
+      const backpagePath = `${user.id}/backpages/${crypto.randomUUID()}.${backpageExt}`
+
+      const { error: backpageErr } = await supabaseAdmin.storage
+        .from('book-covers')
+        .upload(backpagePath, newBackpageFile.content, {
+          contentType: effectiveBackpageMime,
+          upsert: false,
+        })
+
+      if (!backpageErr) {
+        const { data: { publicUrl } } = supabaseAdmin.storage
+          .from('book-covers')
+          .getPublicUrl(backpagePath)
+        new_backpage_url = publicUrl
+        console.log('New backpage uploaded:', new_backpage_url)
+      } else {
+        console.warn('Backpage upload failed:', backpageErr.message)
+      }
+    }
+
     // Build update object
-    const updates: Record<string, any> = {
+    const updates: any = {
       updated_at: new Date().toISOString(),
     }
 
@@ -392,6 +260,7 @@ Deno.serve(async (req): Promise<Response> => {
     if (f.price) updates.price = parseFloat(f.price as string)
     if (f.is_free !== undefined) updates.is_free = (f.is_free as string) === 'true'
     if (f.is_for_sale !== undefined) updates.is_for_sale = (f.is_for_sale as string) === 'true'
+    if (f.is_featured !== undefined) updates.is_featured = (f.is_featured as string) === 'true'
     if (f.stock_quantity) updates.stock_quantity = parseInt(f.stock_quantity as string)
     if (f.isbn) updates.isbn = (f.isbn as string).trim()
     if (f.visibility) updates.visibility = (f.visibility as string)
@@ -403,6 +272,9 @@ Deno.serve(async (req): Promise<Response> => {
     if (f.status) updates.status = (f.status as string)
     if (f.page_count) updates.page_count = parseInt(f.page_count as string)
 
+    // REMOVED: tags handling from updates object
+    // Tags are handled separately through the content_tags junction table
+
     // Handle meta_keywords
     if (f.meta_keywords) {
       updates.meta_keywords = (f.meta_keywords as string)
@@ -411,15 +283,13 @@ Deno.serve(async (req): Promise<Response> => {
         .filter(Boolean)
     }
 
-    // Update file-related fields if file was replaced
-    if (newContentFile) {
-      updates.file_url = new_file_url
-      updates.file_size_bytes = new_file_size
-      updates.format = new_format
-    }
-
+    // Update image URLs if replaced
     if (newCoverFile) {
       updates.cover_image_url = new_cover_url
+    }
+
+    if (newBackpageFile) {
+      updates.backpage_image_url = new_backpage_url
     }
 
     // Set published_at if status changed to published
@@ -439,11 +309,72 @@ Deno.serve(async (req): Promise<Response> => {
 
     if (updateError) {
       console.error('Update error:', updateError)
+      
+      // Translate database errors to user-friendly messages
+      let userMessage = 'Failed to update content. Please try again.'
+      let errorCode = updateError.code
+      
+      // Handle specific PostgreSQL error codes
+      switch (errorCode) {
+        case '23505': // Unique constraint violation
+          if (updateError.message.includes('isbn')) {
+            userMessage = `The ISBN "${updates.isbn}" is already in use by another content item. Please use a different ISBN.`
+          } else if (updateError.message.includes('title')) {
+            userMessage = 'A content item with this title already exists. Please use a different title.'
+          } else {
+            userMessage = 'This value is already in use. Please check your input and try again.'
+          }
+          break
+          
+        case '23514': // Check constraint violation
+          if (updateError.message.includes('content_type')) {
+            userMessage = 'Invalid content type selected. Please choose a valid content type.'
+          } else if (updateError.message.includes('format')) {
+            userMessage = 'Invalid file format. Please upload a supported file type.'
+          } else if (updateError.message.includes('visibility')) {
+            userMessage = 'Invalid visibility setting. Please select a valid option.'
+          } else if (updateError.message.includes('status')) {
+            userMessage = 'Invalid status value. Please select a valid status.'
+          } else {
+            userMessage = 'The provided data does not meet the required format. Please check all fields.'
+          }
+          break
+          
+        case '23503': // Foreign key violation
+          if (updateError.message.includes('category_id')) {
+            userMessage = 'The selected category does not exist. Please choose a valid category.'
+          } else if (updateError.message.includes('organization_id')) {
+            userMessage = 'The selected organization does not exist. Please contact support.'
+          } else {
+            userMessage = 'A required reference is missing. Please check your selections.'
+          }
+          break
+          
+        case '23502': // Not null violation
+          if (updateError.message.includes('title')) {
+            userMessage = 'Title is required. Please provide a title for your content.'
+          } else if (updateError.message.includes('content_type')) {
+            userMessage = 'Content type is required. Please select a content type.'
+          } else {
+            userMessage = 'A required field is missing. Please fill in all required fields.'
+          }
+          break
+          
+        case '22001': // String data too long
+          userMessage = 'One or more fields exceed the maximum length. Please shorten your input.'
+          break
+          
+        default:
+          // Generic database error
+          userMessage = 'Unable to update content due to a database error. Please verify your input and try again.'
+      }
+      
       return new Response(JSON.stringify({
-        error: 'Failed to update content',
-        details: updateError.message
+        error: userMessage,
+        technical_details: updateError.message,
+        error_code: errorCode
       }), {
-        status: 500,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -458,10 +389,11 @@ Deno.serve(async (req): Promise<Response> => {
         console.log('Search vector updated')
       } catch (searchErr) {
         console.warn('Failed to update search vector:', searchErr)
+        // Continue anyway - search update is not critical
       }
     }
 
-    // Handle tag updates if provided
+    // Handle tag updates if provided (through content_tags junction table)
     if (f.tag_ids) {
       try {
         const tagIds = (f.tag_ids as string)
@@ -490,6 +422,7 @@ Deno.serve(async (req): Promise<Response> => {
         console.log('Tags updated:', tagIds.length)
       } catch (tagErr) {
         console.warn('Failed to update tags:', tagErr)
+        // Continue anyway - tag update is not critical
       }
     }
 
@@ -500,8 +433,8 @@ Deno.serve(async (req): Promise<Response> => {
         message: 'Content updated successfully',
         content: updatedContent,
         metadata: {
-          file_replaced: !!newContentFile,
           cover_replaced: !!newCoverFile,
+          backpage_replaced: !!newBackpageFile,
           version: updatedContent.version,
         }
       }),
@@ -511,18 +444,17 @@ Deno.serve(async (req): Promise<Response> => {
       }
     )
 
-  } catch (error: unknown) {
-    const err = error as Error
+  } catch (error) {
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', err.constructor?.name || 'Unknown')
-    console.error('Message:', err.message || 'No message')
-    console.error('Stack:', err.stack || 'No stack')
+    console.error('Type:', error.constructor?.name || 'Unknown')
+    console.error('Message:', error.message || 'No message')
+    console.error('Stack:', error.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: err.message || 'Unknown error',
-        type: err.constructor?.name || 'Error'
+        message: error.message || 'Unknown error',
+        type: error.constructor?.name || 'Error'
       }),
       {
         status: 500,

@@ -1,5 +1,5 @@
 // supabase/functions/content-publish/index.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,8 +8,6 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-
-const MIN_DESCRIPTION_LENGTH = 50
 
 interface PublishRequest {
   content_id: string
@@ -22,7 +20,7 @@ interface ValidationError {
   message: string
 }
 
-Deno.serve(async (req): Promise<Response> => {
+Deno.serve(async (req) => {
   try {
     console.log('=== CONTENT PUBLISH FUNCTION START ===')
     
@@ -148,8 +146,6 @@ Deno.serve(async (req): Promise<Response> => {
         })
       }
 
-      // Removed description length check
-
       if (content.is_for_sale && (!content.price || content.price <= 0)) {
         validationErrors.push({
           field: 'price',
@@ -164,12 +160,7 @@ Deno.serve(async (req): Promise<Response> => {
         })
       }
 
-      if (!content.file_url) {
-        validationErrors.push({
-          field: 'file_url',
-          message: 'Content file is required for publishing'
-        })
-      }
+      // Content file is no longer required for publishing
 
       if (validationErrors.length > 0) {
         console.log('Validation failed:', validationErrors)
@@ -314,23 +305,17 @@ Deno.serve(async (req): Promise<Response> => {
       )
     }
 
-    // Fallback return (should never reach here)
-    return new Response(JSON.stringify({ error: 'Invalid action' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error: unknown) {
-    const err = error as Error
+  } catch (error) {
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', err.constructor?.name || 'Unknown')
-    console.error('Message:', err.message || 'No message')
-    console.error('Stack:', err.stack || 'No stack')
+    console.error('Type:', error.constructor?.name || 'Unknown')
+    console.error('Message:', error.message || 'No message')
+    console.error('Stack:', error.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: err.message || 'Unknown error',
-        type: err.constructor?.name || 'Error'
+        message: error.message || 'Unknown error',
+        type: error.constructor?.name || 'Error'
       }),
       {
         status: 500,

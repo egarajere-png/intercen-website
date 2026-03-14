@@ -2,89 +2,99 @@ import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  BookOpen, 
-  Users, 
-  FileText, 
-  CheckCircle, 
-  ArrowRight, 
+import {
+  BookOpen,
+  Users,
+  FileText,
+  CheckCircle,
+  ArrowRight,
   Pen,
   Building,
   Globe,
   Award,
-  Send
+  Send,
 } from 'lucide-react';
 
 const publishingOptions = [
   {
     icon: BookOpen,
     title: "Traditional Publishing",
-    description: "Partner with us for full editorial, design, and distribution support. We handle everything from manuscript to market.",
+    description:
+      "Partner with us for full editorial, design, and distribution support. We handle everything from manuscript to market.",
     features: [
       "Professional editing and proofreading",
       "Cover design and layout",
       "ISBN registration",
       "Wide distribution network",
-      "Marketing support"
+      "Marketing support",
     ],
-    cta: "Learn More"
+    cta: "Learn More",
+    publishingType: "traditional",
   },
   {
     icon: Pen,
     title: "Self-Publishing Support",
-    description: "Maintain creative control while leveraging our expertise. We provide the tools and guidance you need to succeed.",
+    description:
+      "Maintain creative control while leveraging our expertise. We provide the tools and guidance you need to succeed.",
     features: [
       "Editorial consultation",
       "Design services",
       "Print-on-demand options",
       "Digital publishing",
-      "Author retains rights"
+      "Author retains rights",
     ],
-    cta: "Get Started"
+    cta: "Get Started",
+    publishingType: "self",
   },
   {
     icon: Building,
     title: "Vendor Partnership",
-    description: "Join our marketplace as a vendor. Reach thousands of readers and expand your book distribution network.",
+    description:
+      "Join our marketplace as a vendor. Reach thousands of readers and expand your book distribution network.",
     features: [
       "Access to our customer base",
       "Integrated payment processing",
       "Inventory management",
       "Sales analytics",
-      "Marketing opportunities"
+      "Marketing opportunities",
     ],
-    cta: "Become a Vendor"
-  }
+    cta: "Become a Vendor",
+    publishingType: null, // vendor — separate contact flow
+  },
 ];
 
 const submissionSteps = [
   {
     step: 1,
     title: "Prepare Your Manuscript",
-    description: "Ensure your manuscript is complete and formatted according to our submission guidelines."
+    description:
+      "Ensure your manuscript is complete and formatted according to our submission guidelines.",
   },
   {
     step: 2,
     title: "Submit Your Proposal",
-    description: "Fill out our submission form with your manuscript summary, author bio, and sample chapters."
+    description:
+      "Fill out our submission form with your manuscript summary, author bio, and sample chapters.",
   },
   {
     step: 3,
     title: "Editorial Review",
-    description: "Our editorial team will review your submission and provide feedback within 4-6 weeks."
+    description:
+      "Our editorial team will review your submission and provide feedback within 4-6 weeks.",
   },
   {
     step: 4,
     title: "Contract & Onboarding",
-    description: "If selected, we'll discuss terms and begin the publishing journey together."
-  }
+    description:
+      "If selected, we'll discuss terms and begin the publishing journey together.",
+  },
 ];
 
 const stats = [
-  { value: "500+", label: "Books Published" },
-  { value: "200+", label: "Authors Partnered" },
-  { value: "15+", label: "Years Experience" },
-  { value: "10M+", label: "Readers Reached" }
+  { value: "500+",  label: "Books Published" },
+  { value: "200+",  label: "Authors Partnered" },
+  { value: "15+",   label: "Years Experience" },
+  { value: "10M+",  label: "Readers Reached" },
 ];
 
 const PublishWithUs = () => {
@@ -96,7 +106,7 @@ const PublishWithUs = () => {
           <div className="absolute top-20 right-10 w-72 h-72 bg-primary/30 rounded-full blur-3xl" />
           <div className="absolute bottom-10 left-10 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" />
         </div>
-        
+
         <div className="container relative">
           <div className="max-w-3xl mx-auto text-center">
             <p className="section-subtitle">Authors & Publishers</p>
@@ -105,15 +115,16 @@ const PublishWithUs = () => {
               <span className="block text-primary">With Intercen Books</span>
             </h1>
             <p className="body-1 text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Whether you're a first-time author or an established publisher, we provide 
-              the expertise, resources, and reach to bring your books to readers across Africa and beyond.
+              Whether you're a first-time author or an established publisher, we provide the
+              expertise, resources, and reach to bring your books to readers across Africa and beyond.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              {/* ✅ Replaced mailto: with route link */}
               <Button asChild variant="hero" size="xl" className="gap-2">
-                <a href="mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission">
+                <Link to="/publish/submit">
                   <FileText className="h-5 w-5" />
                   Submit Your Manuscript
-                </a>
+                </Link>
               </Button>
               <Button asChild variant="hero-outline" size="xl" className="gap-2">
                 <a href="mailto:info.intercenbooks@gmail.com?subject=Vendor Partnership Inquiry">
@@ -147,14 +158,17 @@ const PublishWithUs = () => {
             <p className="section-subtitle">Publishing Options</p>
             <h2 className="headline-2 mb-4">Choose Your Publishing Path</h2>
             <p className="body-2 text-muted-foreground max-w-2xl mx-auto">
-              We offer flexible publishing solutions tailored to your needs, 
-              whether you're seeking full support or prefer to maintain creative control.
+              We offer flexible publishing solutions tailored to your needs, whether you're seeking
+              full support or prefer to maintain creative control.
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
             {publishingOptions.map((option, index) => (
-              <Card key={index} className="relative overflow-hidden group hover:shadow-elevated transition-all duration-300">
+              <Card
+                key={index}
+                className="relative overflow-hidden group hover:shadow-elevated transition-all duration-300"
+              >
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-gold" />
                 <CardHeader>
                   <div className="h-14 w-14 rounded-xl bg-accent flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -172,12 +186,31 @@ const PublishWithUs = () => {
                       </li>
                     ))}
                   </ul>
-                  <Button asChild variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <a href={index === 2 ? "mailto:info.intercenbooks@gmail.com?subject=Vendor Partnership Inquiry" : "mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission"}>
-                      {option.cta}
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </a>
-                  </Button>
+
+                  {/* ✅ Route link for manuscript types; mailto for vendor */}
+                  {option.publishingType ? (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                    >
+                      <Link to={`/publish/submit?type=${option.publishingType}`}>
+                        {option.cta}
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                    >
+                      <a href="mailto:info.intercenbooks@gmail.com?subject=Vendor Partnership Inquiry">
+                        {option.cta}
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </a>
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -192,16 +225,16 @@ const PublishWithUs = () => {
             <p className="section-subtitle">How It Works</p>
             <h2 className="headline-2 mb-4">Manuscript Submission Process</h2>
             <p className="body-2 text-muted-foreground max-w-2xl mx-auto">
-              Our streamlined submission process ensures your manuscript receives 
-              the attention it deserves from our experienced editorial team.
+              Our streamlined submission process ensures your manuscript receives the attention it
+              deserves from our experienced editorial team.
             </p>
           </div>
 
           <div className="max-w-4xl mx-auto">
             <div className="grid md:grid-cols-2 gap-6">
               {submissionSteps.map((item, index) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="flex gap-4 p-6 bg-card rounded-xl border shadow-soft hover:shadow-elegant transition-shadow"
                 >
                   <div className="h-12 w-12 rounded-full bg-primary flex items-center justify-center shrink-0">
@@ -226,12 +259,11 @@ const PublishWithUs = () => {
               <p className="section-subtitle section-subtitle-left">Why Intercen Books</p>
               <h2 className="headline-2 mb-6">A Publisher You Can Trust</h2>
               <p className="body-2 text-muted-foreground mb-8">
-                With over 15 years of experience in African publishing, we've built 
-                a reputation for quality, integrity, and author-centric partnerships. 
-                Our commitment goes beyond publishing—we nurture literary talent and 
-                champion diverse voices.
+                With over 15 years of experience in African publishing, we've built a reputation
+                for quality, integrity, and author-centric partnerships. Our commitment goes beyond
+                publishing—we nurture literary talent and champion diverse voices.
               </p>
-              
+
               <div className="space-y-4">
                 <div className="flex items-start gap-4">
                   <div className="h-10 w-10 rounded-lg bg-accent flex items-center justify-center shrink-0">
@@ -271,14 +303,16 @@ const PublishWithUs = () => {
 
             <div className="relative">
               <div className="aspect-[4/3] rounded-2xl overflow-hidden">
-                <img 
+                <img
                   src="https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&h=600&fit=crop"
                   alt="Publishing workspace"
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="absolute -bottom-6 -left-6 bg-card p-6 rounded-xl shadow-elevated max-w-xs">
-                <p className="font-forum text-lg mb-2">"Intercen Books believed in my story when others didn't."</p>
+                <p className="font-forum text-lg mb-2">
+                  "Intercen Books believed in my story when others didn't."
+                </p>
                 <p className="text-sm text-muted-foreground">— Sarah Muthoni, Author</p>
               </div>
             </div>
@@ -292,18 +326,21 @@ const PublishWithUs = () => {
           <div className="max-w-3xl mx-auto text-center">
             <h2 className="headline-2 text-white mb-4">Ready to Get Published?</h2>
             <p className="body-2 text-white/70 mb-8">
-              Take the first step towards sharing your story with the world. 
-              Submit your manuscript today or reach out to discuss partnership opportunities.
+              Take the first step towards sharing your story with the world. Submit your manuscript
+              today or reach out to discuss partnership opportunities.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              {/* ✅ Replaced mailto: with route link */}
               <Button asChild variant="gold" size="xl" className="gap-2">
-                <a href="mailto:info.intercenbooks@gmail.com?subject=Manuscript Submission">
+                <Link to="/publish/submit">
                   <Send className="h-5 w-5" />
                   Submit Manuscript
-                </a>
+                </Link>
               </Button>
-              <Button variant="outline" size="xl" className="border-white/30 text-white hover:bg-white/10">
-                Contact Us
+              <Button asChild variant="outline" size="xl" className="border-white/30 text-white hover:bg-white/10">
+                <a href="mailto:info.intercenbooks@gmail.com?subject=General Inquiry">
+                  Contact Us
+                </a>
               </Button>
             </div>
           </div>

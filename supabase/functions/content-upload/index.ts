@@ -13,89 +13,21 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const MAX_CONTENT_SIZE = 100 * 1024 * 1024 // 100MB
 const MAX_COVER_SIZE = 10 * 1024 * 1024    // 10MB
 const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024 // 10MB
-
-// Comprehensive list of allowed MIME types
-const ALLOWED_CONTENT_MIMES = [
-  'application/pdf', 'application/epub+zip', 'application/x-mobipocket-ebook',
-  'application/vnd.amazon.ebook', 'application/msword', 'application/vnd.ms-excel',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'application/vnd.oasis.opendocument.text',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  'application/vnd.oasis.opendocument.presentation',
-  'text/plain', 'text/markdown', 'text/csv', 'text/html', 'application/xhtml+xml',
-  'application/zip', 'application/x-zip-compressed',
-  'image/jpeg', 'image/png', 'image/webp',
-]
 
 const ALLOWED_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_BACKPAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
-// Valid file extensions
-const validContentExtensions = [
-  'pdf', 'epub', 'mobi', 'azw', 'azw3', 'doc', 'docx', 'xls', 'xlsx', 
-  'ppt', 'pptx', 'odt', 'ods', 'odp', 'txt', 'md', 'markdown', 'csv', 
-  'html', 'htm', 'xhtml', 'zip', 'jpg', 'jpeg', 'png', 'webp'
-]
-
 const validCoverExtensions = ['jpg', 'jpeg', 'png', 'webp']
 const validBackpageExtensions = ['jpg', 'jpeg', 'png', 'webp']
 
-// Format mapping
-const formatMap: Record<string, string> = {
-  'pdf': 'pdf', 'doc': 'doc', 'docx': 'docx', 'txt': 'txt', 'md': 'markdown',
-  'markdown': 'markdown', 'xls': 'xls', 'xlsx': 'xlsx', 'csv': 'csv',
-  'ods': 'ods', 'ppt': 'ppt', 'pptx': 'pptx', 'odp': 'odp', 'epub': 'epub',
-  'mobi': 'mobi', 'azw': 'azw', 'azw3': 'azw3', 'html': 'html', 'htm': 'html',
-  'xhtml': 'xhtml', 'odt': 'odt', 'zip': 'zip', 'jpg': 'jpg', 'jpeg': 'jpeg',
-  'png': 'png', 'webp': 'webp',
-}
-
 // MIME type fallback mapping (extension → MIME type)
 const mimeMap: Record<string, string> = {
-  pdf: 'application/pdf',
-  epub: 'application/epub+zip',
-  mobi: 'application/x-mobipocket-ebook',
-  azw: 'application/vnd.amazon.ebook',
-  azw3: 'application/vnd.amazon.ebook',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  ppt: 'application/vnd.ms-powerpoint',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  odt: 'application/vnd.oasis.opendocument.text',
-  ods: 'application/vnd.oasis.opendocument.spreadsheet',
-  odp: 'application/vnd.oasis.opendocument.presentation',
-  txt: 'text/plain',
-  md: 'text/markdown',
-  markdown: 'text/markdown',
-  csv: 'text/csv',
-  html: 'text/html',
-  htm: 'text/html',
-  xhtml: 'application/xhtml+xml',
-  zip: 'application/zip',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
-}
-
-const getFormatFromFilename = (filename: string): string => {
-  const ext = filename.split('.').pop()?.toLowerCase() || ''
-  return formatMap[ext] || ext || 'unknown'
-}
-
-const getStorageBucket = (contentType: string, mimeType: string): string => {
-  if (['book', 'ebook'].includes(contentType.toLowerCase())) return 'book-files'
-  if (mimeType.startsWith('image/')) return 'manuscripts'
-  if (contentType.toLowerCase().includes('manuscript')) return 'manuscripts'
-  return 'documets' // note: likely a typo in original – should probably be 'documents'
 }
 
 Deno.serve(async (req) => {
@@ -152,16 +84,15 @@ Deno.serve(async (req) => {
       })
     }
 
-    if (!form?.files || !form?.fields) {
+    if (!form?.fields) {
       return new Response(JSON.stringify({ error: 'Invalid form data' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const contentFile = form.files.content_file
-    const coverFile = form.files.cover_image
-    const backpageFile = form.files.backpage_image
+    const coverFile = form.files?.cover_image
+    const backpageFile = form.files?.backpage_image
     const f = form.fields
 
     const title = (f.title as string)?.trim()
@@ -185,13 +116,6 @@ Deno.serve(async (req) => {
     const isEbookType = content_type.toLowerCase() === 'ebook'
     
     if (isEbookType) {
-      if (!contentFile) {
-        return new Response(JSON.stringify({ error: 'content_file is required for ebooks' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-      
       if (!coverFile) {
         return new Response(JSON.stringify({ error: 'cover_image is required for ebooks' }), {
           status: 400,
@@ -208,87 +132,6 @@ Deno.serve(async (req) => {
     }
 
     console.log('Validation passed')
-
-    // Determine format and bucket (only if content file exists)
-    let format = 'unknown'
-    let storageBucket = 'documets'
-    let effectiveContentMime = 'application/octet-stream'
-    let file_url: string | null = null
-    let file_size_bytes = 0
-
-    // Only process content file if it exists
-    if (contentFile) {
-      // Validate content file
-      const contentExt = contentFile.filename.split('.').pop()?.toLowerCase() || ''
-      const isValidContentMime = contentFile.type && ALLOWED_CONTENT_MIMES.includes(contentFile.type)
-      const isValidContentExt = validContentExtensions.includes(contentExt)
-
-      if (!isValidContentMime && !isValidContentExt) {
-        return new Response(JSON.stringify({
-          error: 'Invalid content file type',
-          received_type: contentFile.type || 'undefined',
-          received_extension: contentExt,
-          allowed_extensions: validContentExtensions
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      if (contentFile.length > MAX_CONTENT_SIZE) {
-        return new Response(JSON.stringify({
-          error: 'File too large',
-          size: `${(contentFile.length / 1024 / 1024).toFixed(2)}MB`,
-          limit: '100MB'
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      format = getFormatFromFilename(contentFile.filename)
-      storageBucket = getStorageBucket(content_type, contentFile.type || '')
-
-      // Determine effective MIME type for content file upload (fallback to extension)
-      effectiveContentMime = contentFile.type
-      if (!effectiveContentMime || !ALLOWED_CONTENT_MIMES.includes(effectiveContentMime)) {
-        effectiveContentMime = mimeMap[contentExt] || 'application/octet-stream'
-        console.log(`MIME type missing or invalid – falling back to ${effectiveContentMime} based on extension`)
-      }
-
-      // Upload content file
-      const ext = contentFile.filename.split('.').pop()?.toLowerCase() || format
-      const contentPath = `${user.id}/${crypto.randomUUID()}.${ext}`
-
-      console.log('Uploading to bucket:', storageBucket, 'with MIME:', effectiveContentMime)
-
-      const { error: uploadErr } = await supabaseAdmin.storage
-        .from(storageBucket)
-        .upload(contentPath, contentFile.content, {
-          contentType: effectiveContentMime,
-          upsert: false,
-        })
-
-      if (uploadErr) {
-        console.error('Upload error:', uploadErr)
-        return new Response(JSON.stringify({
-          error: 'Upload failed',
-          details: uploadErr.message,
-          bucket: storageBucket
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        })
-      }
-
-      const { data: { publicUrl } } = supabaseAdmin.storage
-        .from(storageBucket)
-        .getPublicUrl(contentPath)
-
-      file_url = publicUrl
-      file_size_bytes = contentFile.length
-      console.log('File uploaded:', file_url)
-    }
 
     // Validate cover if present
     if (coverFile) {
@@ -309,7 +152,7 @@ Deno.serve(async (req) => {
       }
 
       if (coverFile.length > MAX_COVER_SIZE) {
-        return new Response(JSON.stringify({ error: 'Cover too large' }), {
+        return new Response(JSON.stringify({ error: 'Cover too large (max 10MB)' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
@@ -335,7 +178,7 @@ Deno.serve(async (req) => {
       }
 
       if (backpageFile.length > MAX_BACKPAGE_SIZE) {
-        return new Response(JSON.stringify({ error: 'Backpage too large' }), {
+        return new Response(JSON.stringify({ error: 'Backpage too large (max 10MB)' }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         })
@@ -412,7 +255,7 @@ Deno.serve(async (req) => {
       subtitle: (f.subtitle as string)?.trim() || null,
       description: (f.description as string)?.trim() || null,
       content_type,
-      format,
+      format: null, // No file uploaded, so format is null
       author: (f.author as string)?.trim() || null,
       publisher: (f.publisher as string)?.trim() || null,
       published_date: (f.published_date as string) || null,
@@ -420,8 +263,8 @@ Deno.serve(async (req) => {
       language: (f.language as string) || 'en',
       cover_image_url,
       backpage_image_url,
-      file_url,
-      file_size_bytes,
+      file_url: null,
+      file_size_bytes: 0,
       page_count: null,
       price: f.price ? parseFloat(f.price as string) : 0.00,
       is_free: (f.is_free as string) === 'true',
@@ -451,11 +294,72 @@ Deno.serve(async (req) => {
 
     if (dbError) {
       console.error('DB error:', dbError)
+      
+      // Translate database errors to user-friendly messages
+      let userMessage = 'Failed to save content. Please try again.'
+      let errorCode = dbError.code
+      
+      // Handle specific PostgreSQL error codes
+      switch (errorCode) {
+        case '23505': // Unique constraint violation
+          if (dbError.message.includes('isbn')) {
+            userMessage = `The ISBN "${insertData.isbn}" is already in use. Please use a different ISBN or leave it empty.`
+          } else if (dbError.message.includes('title')) {
+            userMessage = 'A content item with this title already exists. Please use a different title.'
+          } else {
+            userMessage = 'This content already exists in the system. Please check your input and try again.'
+          }
+          break
+          
+        case '23514': // Check constraint violation
+          if (dbError.message.includes('content_type')) {
+            userMessage = 'Invalid content type selected. Please choose a valid content type.'
+          } else if (dbError.message.includes('format')) {
+            userMessage = 'Invalid file format. Please upload a supported file type.'
+          } else if (dbError.message.includes('visibility')) {
+            userMessage = 'Invalid visibility setting. Please select a valid option.'
+          } else if (dbError.message.includes('status')) {
+            userMessage = 'Invalid status value. Please select a valid status.'
+          } else {
+            userMessage = 'The provided data does not meet the required format. Please check all fields.'
+          }
+          break
+          
+        case '23503': // Foreign key violation
+          if (dbError.message.includes('category_id')) {
+            userMessage = 'The selected category does not exist. Please choose a valid category.'
+          } else if (dbError.message.includes('organization_id')) {
+            userMessage = 'The selected organization does not exist. Please contact support.'
+          } else {
+            userMessage = 'A required reference is missing. Please check your selections.'
+          }
+          break
+          
+        case '23502': // Not null violation
+          if (dbError.message.includes('title')) {
+            userMessage = 'Title is required. Please provide a title for your content.'
+          } else if (dbError.message.includes('content_type')) {
+            userMessage = 'Content type is required. Please select a content type.'
+          } else {
+            userMessage = 'A required field is missing. Please fill in all required fields.'
+          }
+          break
+          
+        case '22001': // String data too long
+          userMessage = 'One or more fields exceed the maximum length. Please shorten your input.'
+          break
+          
+        default:
+          // Generic database error
+          userMessage = 'Unable to save content due to a database error. Please verify your input and try again.'
+      }
+      
       return new Response(JSON.stringify({
-        error: 'Database insert failed',
-        details: dbError.message
+        error: userMessage,
+        technical_details: dbError.message,
+        error_code: errorCode
       }), {
-        status: 500,
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -467,10 +371,6 @@ Deno.serve(async (req) => {
         message: 'Content uploaded successfully',
         content,
         metadata: {
-          bucket: storageBucket,
-          format,
-          file_size: contentFile ? `${(contentFile.length / 1024 / 1024).toFixed(2)}MB` : 'N/A',
-          has_content_file: !!file_url,
           has_cover: !!cover_image_url,
           has_backpage: !!backpage_image_url,
         }

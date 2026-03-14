@@ -121,14 +121,13 @@ serve(async (req) => {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    const err = error as Error;
-    console.error("Error in cart-clear function:", err);
+  } catch (error) {
+    console.error("Error in cart-clear function:", error);
 
     return new Response(
       JSON.stringify({
         error: "Internal Server Error",
-        message: err.message || "An unexpected error occurred",
+        message: error.message || "An unexpected error occurred",
       }),
       {
         status: 500,

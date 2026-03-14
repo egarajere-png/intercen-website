@@ -10,7 +10,7 @@ const corsHeaders = {
 };
 
 // Verify Paystack webhook signature
-async function verifyPaystackSignature(payload: string, signature: string): Promise<boolean> {
+function verifyPaystackSignature(payload: string, signature: string): boolean {
   const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
   
   if (!paystackSecretKey) {
@@ -24,7 +24,7 @@ async function verifyPaystackSignature(payload: string, signature: string): Prom
     const payloadData = encoder.encode(payload);
     
     // Create HMAC SHA512 hash
-    const cryptoKey = await crypto.subtle.importKey(
+    const key = crypto.subtle.importKey(
       'raw',
       keyData,
       { name: 'HMAC', hash: 'SHA-512' },
@@ -32,17 +32,19 @@ async function verifyPaystackSignature(payload: string, signature: string): Prom
       ['sign']
     );
 
-    const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, payloadData);
-    const hashArray = Array.from(new Uint8Array(signatureBuffer));
-    const computedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    console.log('Signature verification:', {
-      received: signature,
-      computed: computedSignature,
-      match: computedSignature === signature,
-    });
+    return key.then(async (cryptoKey) => {
+      const signatureBuffer = await crypto.subtle.sign('HMAC', cryptoKey, payloadData);
+      const hashArray = Array.from(new Uint8Array(signatureBuffer));
+      const computedSignature = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      
+      console.log('Signature verification:', {
+        received: signature,
+        computed: computedSignature,
+        match: computedSignature === signature,
+      });
 
-    return computedSignature === signature;
+      return computedSignature === signature;
+    });
   } catch (error) {
     console.error('Signature verification error:', error);
     return false;
@@ -50,7 +52,6 @@ async function verifyPaystackSignature(payload: string, signature: string): Prom
 }
 
 // Release reserved stock
-// deno-lint-ignore no-explicit-any
 async function releaseStock(supabase: any, orderId: string): Promise<void> {
   console.log('Releasing stock for order:', orderId);
 
@@ -69,27 +70,11 @@ async function releaseStock(supabase: any, orderId: string): Promise<void> {
     console.log('Order items to release:', orderItems.length);
 
     // Release stock for each item
-    for (const orderItem of orderItems) {
-      const item = orderItem as { content_id: string; quantity: number };
-      
-      // Get current stock first
-      const { data: contentData, error: fetchError } = await supabase
-        .from('content')
-        .select('stock_quantity')
-        .eq('id', item.content_id)
-        .single();
-
-      if (fetchError || !contentData) {
-        console.error('Failed to fetch content for stock release:', item.content_id);
-        continue;
-      }
-
-      const newStock = (contentData as { stock_quantity: number }).stock_quantity + item.quantity;
-
+    for (const item of orderItems) {
       const { error: updateError } = await supabase
         .from('content')
         .update({ 
-          stock_quantity: newStock,
+          stock_quantity: supabase.raw(`stock_quantity + ${item.quantity}`),
           updated_at: new Date().toISOString(),
         })
         .eq('id', item.content_id);
@@ -363,20 +348,19 @@ serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: unknown) {
-    const err = error as Error;
+  } catch (error) {
     const processingTime = Date.now() - startTime;
     console.error('=== Webhook Processing Failed ===', {
       processingTime: `${processingTime}ms`,
-      error: err.message,
-      stack: err.stack,
+      error: error.message,
+      stack: error.stack,
     });
     
     // Still return 200 to acknowledge webhook (prevent retries for invalid data)
     return new Response(
       JSON.stringify({ 
         message: 'Webhook acknowledged but processing failed',
-        error: err.message 
+        error: error.message 
       }),
       { 
         status: 200, 

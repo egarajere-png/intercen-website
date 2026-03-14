@@ -5,126 +5,200 @@ import { createClient } from "@supabase/supabase-js";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface VerifyRequest {
+  reference?: string;
+  order_id?: string;
+}
+
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
+  const startTime = Date.now();
+  console.log('=== Payment Verification Started ===');
 
   try {
-    const { reference } = await req.json();
-
-    if (!reference) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Reference is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Get authorization header
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      throw new Error('Missing authorization header');
     }
 
-    const secretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
-    if (!secretKey) {
-      console.error('Paystack secret key missing');
-      throw new Error('Server configuration error');
-    }
-
-    console.log(`Verifying transaction: ${reference}`);
-
-    const res = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${secretKey}`,
-        'Content-Type': 'application/json',
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      global: {
+        headers: { Authorization: authHeader },
       },
     });
 
-    if (!res.ok) {
-      throw new Error(`Paystack API error: ${res.status}`);
+    // Get authenticated user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Unauthorized');
     }
 
-    const data = await res.json();
+    // Parse request body
+    const body: VerifyRequest = await req.json();
+    const { reference, order_id } = body;
 
-    if (!data.status || !data.data) {
+    if (!reference && !order_id) {
       return new Response(
-        JSON.stringify({
-          success: false,
-          error: data.message || 'Verification failed',
+        JSON.stringify({ error: 'Payment reference or order ID is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Verifying payment:', { reference, orderId: order_id });
+
+    // Get order
+    let order = null;
+    if (order_id) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', order_id)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error('Order lookup error:', error);
+      }
+      order = data;
+    } else if (reference) {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('payment_reference', reference)
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error('Order lookup by reference error:', error);
+      }
+      order = data;
+    }
+
+    if (!order) {
+      return new Response(
+        JSON.stringify({ error: 'Order not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Order found:', {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      paymentStatus: order.payment_status,
+      paymentReference: order.payment_reference,
+    });
+
+    const paymentReference = reference || order.payment_reference;
+
+    if (!paymentReference) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'No payment reference found',
+          order_id: order.id,
+          order_number: order.order_number,
+          payment_status: order.payment_status,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const tx = data.data;
-    const txStatus = tx.status; // 'success', 'failed', 'abandoned', etc.
-    const amount = tx.amount / 100;
-    const orderId = tx.metadata?.order_id;
-
-    if (!orderId) {
-      console.warn('No order_id in metadata', { reference });
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'No order linked to this transaction',
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Create admin client to update order (bypasses RLS)
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
+    // Verify with Paystack
+    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
+    
+    console.log('Verifying with Paystack API:', paymentReference);
+    
+    const verifyResponse = await fetch(
+      `https://api.paystack.co/transaction/verify/${paymentReference}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${paystackSecretKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
     );
 
-    let newPaymentStatus = 'pending';
+    const verifyData = await verifyResponse.json();
 
-    if (txStatus === 'success') {
-      newPaymentStatus = 'paid';
-    } else if (['failed', 'abandoned', 'reversed'].includes(txStatus)) {
-      newPaymentStatus = 'failed';
+    console.log('Paystack verification response:', {
+      status: verifyData.status,
+      message: verifyData.message,
+      transactionStatus: verifyData.data?.status,
+    });
+
+    if (!verifyData.status || !verifyData.data) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Payment verification failed',
+          message: verifyData.message,
+          order_id: order.id,
+          order_number: order.order_number,
+          payment_status: order.payment_status,
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const { error: updateError } = await supabaseAdmin
-      .from('orders')
-      .update({
-        payment_status: newPaymentStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', orderId)
-      .eq('payment_reference', reference);
+    const transaction = verifyData.data;
+    const processingTime = Date.now() - startTime;
 
-    if (updateError) {
-      console.error('Failed to update order status', updateError);
-      // Still return success to user (idempotent), but log
-    }
+    console.log('=== Payment Verification Completed ===', {
+      processingTime: `${processingTime}ms`,
+      transactionStatus: transaction.status,
+      orderPaymentStatus: order.payment_status,
+    });
 
+    // Return verification result
     return new Response(
       JSON.stringify({
         success: true,
-        order_id: orderId,
-        payment_status: newPaymentStatus,
-        transaction_status: txStatus,
-        amount_kes: amount,
+        order_id: order.id,
+        order_number: order.order_number,
+        payment_reference: paymentReference,
+        payment_status: order.payment_status,
+        order_status: order.status,
+        transaction_status: transaction.status,
+        amount: transaction.amount / 100, // Convert from kobo
+        paid_at: transaction.paid_at,
+        transaction_data: {
+          channel: transaction.channel,
+          currency: transaction.currency,
+          ip_address: transaction.ip_address,
+          fees: transaction.fees / 100,
+        },
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (err: unknown) {
-    const error = err as Error;
-    console.error('Verification error:', error);
+  } catch (error) {
+    const processingTime = Date.now() - startTime;
+    console.error('=== Payment Verification Failed ===', {
+      processingTime: `${processingTime}ms`,
+      error: error.message,
+      stack: error.stack,
+    });
+    
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'Internal error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        error: error.message || 'An unexpected error occurred',
+        details: error.toString()
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   }
 });

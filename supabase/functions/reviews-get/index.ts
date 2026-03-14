@@ -1,7 +1,7 @@
 // supabase/functions/reviews-get/index.ts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"; // ← prefer newer version if possible
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,16 +10,12 @@ const corsHeaders = {
 };
 
 serve(async (req: Request): Promise<Response> => {
-  // ────────────────────────────────────────────────
-  // CORS preflight
-  // ────────────────────────────────────────────────
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // ────────────────────────────────────────────────
-  // Only allow GET
-  // ────────────────────────────────────────────────
+  // Only allow GET requests
   if (req.method !== "GET") {
     return new Response(
       JSON.stringify({ error: "Method not allowed. Use GET." }),
@@ -31,17 +27,13 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    // ────────────────────────────────────────────────
-    // Admin client – bypasses RLS for reads
-    // ────────────────────────────────────────────────
+    // Use service role client → bypasses RLS safely for reads
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    // ────────────────────────────────────────────────
     // Parse query parameters
-    // ────────────────────────────────────────────────
     const url = new URL(req.url);
     const content_id = url.searchParams.get("content_id");
 
@@ -79,12 +71,10 @@ serve(async (req: Request): Promise<Response> => {
 
     const offset = (page - 1) * limit;
 
-    // ────────────────────────────────────────────────
     // Optional: Identify logged-in user (best effort)
-    // ────────────────────────────────────────────────
     let currentUserId: string | null = null;
-
     const authHeader = req.headers.get("authorization");
+
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.substring(7);
       const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
@@ -94,15 +84,26 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     // ────────────────────────────────────────────────
-    // Main reviews query
+    // Main reviews query – using correct column names
     // ────────────────────────────────────────────────
     let query = supabaseAdmin
       .from("reviews")
       .select(
         `
-          id, content_id, user_id, rating, title, content, helpful_count,
-          is_verified_purchase, created_at, updated_at,
-          profiles!reviews_user_id_fkey (full_name, avatar_url)
+          id,
+          content_id,
+          user_id,
+          rating,
+          title,
+          review_text,
+          helpful_count,
+          is_verified_purchase,
+          created_at,
+          updated_at,
+          profiles!reviews_user_id_fkey (
+            full_name,
+            avatar_url
+          )
         `,
         { count: "exact" },
       )
@@ -136,7 +137,11 @@ serve(async (req: Request): Promise<Response> => {
     if (reviewsErr) {
       console.error("Reviews query failed:", reviewsErr);
       return new Response(
-        JSON.stringify({ error: "Could not load reviews", code: reviewsErr.code }),
+        JSON.stringify({
+          error: "Could not load reviews",
+          details: reviewsErr.message,
+          code: reviewsErr.code,
+        }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -174,9 +179,20 @@ serve(async (req: Request): Promise<Response> => {
         .from("reviews")
         .select(
           `
-            id, content_id, user_id, rating, title, content, helpful_count,
-            is_verified_purchase, created_at, updated_at,
-            profiles!reviews_user_id_fkey (full_name, avatar_url)
+            id,
+            content_id,
+            user_id,
+            rating,
+            title,
+            review_text,
+            helpful_count,
+            is_verified_purchase,
+            created_at,
+            updated_at,
+            profiles!reviews_user_id_fkey (
+              full_name,
+              avatar_url
+            )
           `,
         )
         .eq("content_id", content_id)

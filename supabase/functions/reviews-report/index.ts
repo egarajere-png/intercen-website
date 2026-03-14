@@ -59,8 +59,11 @@ serve(async (req) => {
     const body: ReportReviewRequest = await req.json();
     const { review_id, reason } = body;
 
+    console.log("Report request:", { review_id, reason_length: reason?.length, user_id: user.id });
+
     // Validate required fields
     if (!review_id || !reason) {
+      console.log("Missing required fields");
       return new Response(
         JSON.stringify({ error: "review_id and reason are required" }),
         {
@@ -72,6 +75,7 @@ serve(async (req) => {
 
     // Validate reason length
     if (reason.trim().length < 10) {
+      console.log("Reason too short:", reason.trim().length);
       return new Response(
         JSON.stringify({ error: "Reason must be at least 10 characters long" }),
         {
@@ -82,6 +86,7 @@ serve(async (req) => {
     }
 
     if (reason.length > 1000) {
+      console.log("Reason too long:", reason.length);
       return new Response(
         JSON.stringify({ error: "Reason must not exceed 1000 characters" }),
         {
@@ -110,6 +115,7 @@ serve(async (req) => {
     }
 
     if (!review) {
+      console.log("Review not found:", review_id);
       return new Response(
         JSON.stringify({ error: "Review not found" }),
         {
@@ -119,8 +125,11 @@ serve(async (req) => {
       );
     }
 
+    console.log("Review found:", { review_user_id: review.user_id, current_user_id: user.id });
+
     // Step 2: Prevent users from reporting their own reviews
     if (review.user_id === user.id) {
+      console.log("User trying to report own review");
       return new Response(
         JSON.stringify({ error: "You cannot report your own review" }),
         {
@@ -153,6 +162,7 @@ serve(async (req) => {
 
     // If user already reported, update the existing report
     if (existingReport) {
+      console.log("Updating existing report:", existingReport.id);
       const { error: updateError } = await supabaseAdmin
         .from("reported_content")
         .update({
@@ -186,6 +196,7 @@ serve(async (req) => {
     }
 
     // Step 4: Create new report
+    console.log("Creating new report");
     const { data: newReport, error: insertError } = await supabaseAdmin
       .from("reported_content")
       .insert({
@@ -201,7 +212,7 @@ serve(async (req) => {
     if (insertError) {
       console.error("Report insert error:", insertError);
       return new Response(
-        JSON.stringify({ error: "Failed to submit report" }),
+        JSON.stringify({ error: "Failed to submit report", details: insertError.message }),
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -226,11 +237,11 @@ serve(async (req) => {
     let autoHidden = false;
 
     // Step 6: Auto-hide review if it has 5+ reports (trigger handles this)
-    // The database trigger will automatically hide the review
-    // We just check the count to inform the user
     if (reportCount >= 5) {
       autoHidden = true;
     }
+
+    console.log("Report created successfully:", { report_id: newReport.id, total_reports: reportCount });
 
     // Return success response
     return new Response(

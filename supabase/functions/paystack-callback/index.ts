@@ -1,14 +1,13 @@
 // supabase/functions/paystack-callback/index.ts
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -28,13 +27,14 @@ serve(async (req) => {
       reference,
       trxref,
       transactionReference,
+      fullUrl: req.url,
     });
 
     if (!transactionReference) {
       console.error('No transaction reference found in callback');
       
       // Redirect to frontend error page
-      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://intercenbooks.vercel.app';
       return Response.redirect(
         `${frontendUrl}/checkout/payment-failed?error=no_reference`,
         302
@@ -69,7 +69,7 @@ serve(async (req) => {
     if (!verifyData.status || !verifyData.data) {
       console.error('Transaction verification failed:', verifyData.message);
       
-      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://intercenbooks.vercel.app';
       return Response.redirect(
         `${frontendUrl}/checkout/payment-failed?error=verification_failed&reference=${transactionReference}`,
         302
@@ -106,7 +106,7 @@ serve(async (req) => {
     if (!order) {
       console.error('Order not found:', { orderId, orderNumber, reference: transactionReference });
       
-      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';
+      const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://intercenbooks.vercel.app';
       return Response.redirect(
         `${frontendUrl}/checkout/payment-failed?error=order_not_found&reference=${transactionReference}`,
         302
@@ -120,56 +120,55 @@ serve(async (req) => {
       status: order.status,
     });
 
-    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://intercenbooks.vercel.app';
 
     // Handle based on transaction status
     switch (transaction.status) {
       case 'success':
         console.log('Payment successful - redirecting to success page');
         return Response.redirect(
-          `${frontendUrl}/checkout/payment-success?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
+          `${frontendUrl}/payment-success?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
           302
         );
 
       case 'failed':
         console.log('Payment failed - redirecting to failure page');
         return Response.redirect(
-          `${frontendUrl}/checkout/payment-failed?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}&reason=payment_failed`,
+          `${frontendUrl}/payment-failed?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}&reason=payment_failed`,
           302
         );
 
       case 'abandoned':
         console.log('Payment abandoned - redirecting to cancelled page');
         return Response.redirect(
-          `${frontendUrl}/checkout/payment-cancelled?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
+          `${frontendUrl}/payment-cancelled?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
           302
         );
 
       case 'pending':
         console.log('Payment pending - redirecting to pending page');
         return Response.redirect(
-          `${frontendUrl}/checkout/payment-pending?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
+          `${frontendUrl}/payment-pending?order_id=${order.id}&order_number=${order.order_number}&reference=${transactionReference}`,
           302
         );
 
       default:
         console.warn('Unknown payment status:', transaction.status);
         return Response.redirect(
-          `${frontendUrl}/checkout/payment-status?order_id=${order.id}&status=${transaction.status}&reference=${transactionReference}`,
+          `${frontendUrl}/payment-status?order_id=${order.id}&status=${transaction.status}&reference=${transactionReference}`,
           302
         );
     }
 
-  } catch (error: unknown) {
-    const err = error as Error;
+  } catch (error) {
     console.error('=== Callback Processing Failed ===', {
-      error: err.message,
-      stack: err.stack,
+      error: error.message,
+      stack: error.stack,
     });
     
-    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = Deno.env.get('FRONTEND_URL') || 'https://intercenbooks.vercel.app';
     return Response.redirect(
-      `${frontendUrl}/checkout/payment-failed?error=callback_error`,
+      `${frontendUrl}/payment-failed?error=callback_error`,
       302
     );
   }

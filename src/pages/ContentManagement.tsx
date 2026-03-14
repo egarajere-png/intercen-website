@@ -69,7 +69,7 @@ const ContentManagementPage: React.FC = () => {
                 </li>
               ))}
             </ul>
-          )}
+          )}c
         </Card>
       </div>
     </>

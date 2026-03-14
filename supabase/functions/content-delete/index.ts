@@ -234,9 +234,9 @@ Deno.serve(async (req) => {
             console.log('Content file deleted successfully')
           }
         }
-      } catch (err: unknown) {
+      } catch (err) {
         console.warn('Error deleting content file:', err)
-        storageErrors.push(`Content file: ${(err as Error).message}`)
+        storageErrors.push(`Content file: ${err.message}`)
       }
     }
 
@@ -258,9 +258,9 @@ Deno.serve(async (req) => {
             console.log('Cover image deleted successfully')
           }
         }
-      } catch (err: unknown) {
+      } catch (err) {
         console.warn('Error deleting cover image:', err)
-        storageErrors.push(`Cover image: ${(err as Error).message}`)
+        storageErrors.push(`Cover image: ${err.message}`)
       }
     }
 
@@ -372,18 +372,17 @@ Deno.serve(async (req) => {
       }
     )
 
-  } catch (error: unknown) {
-    const err = error as Error
+  } catch (error) {
     console.error('=== UNEXPECTED ERROR ===')
-    console.error('Type:', err.constructor?.name || 'Unknown')
-    console.error('Message:', err.message || 'No message')
-    console.error('Stack:', err.stack || 'No stack')
+    console.error('Type:', error.constructor?.name || 'Unknown')
+    console.error('Message:', error.message || 'No message')
+    console.error('Stack:', error.stack || 'No stack')
 
     return new Response(
       JSON.stringify({
         error: 'Internal server error',
-        message: err.message || 'Unknown error',
-        type: err.constructor?.name || 'Error'
+        message: error.message || 'Unknown error',
+        type: error.constructor?.name || 'Error'
       }),
       {
         status: 500,
