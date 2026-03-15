@@ -62,7 +62,6 @@ const App = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
-<<<<<<< HEAD
               {/* RoleProvider must be inside BrowserRouter (needs router context)
                   but wrapping all routes so every page can call useRole() */}
               <RoleProvider>
@@ -97,7 +96,7 @@ const App = () => {
                       path="/reset-password"
                       element={
                         <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                          <PasswordChange />
+                          <ResetPassword />
                         </Suspense>
                       }
                     />
@@ -123,53 +122,6 @@ const App = () => {
                   </Routes>
                 </PageTransition>
               </RoleProvider>
-=======
-              <PageTransition>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/books" element={<Books />} />
-                  <Route path="/books/:id" element={<BookDetail />} />
-                  <Route path="/cart" element={<Cart />} />
-                  {/* Payment Routes */}
-                  <Route path="/checkout/payment/:orderId" element={<CheckoutPayment />} />
-                  <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
-                  <Route path="/payment-success" element={<PaymentConfirmationPage />} />
-                  <Route path="/payment-failed" element={<PaymentConfirmationPage />} />
-                  <Route path="/payment-cancelled" element={<PaymentConfirmationPage />} />
-                  <Route path="/payment-pending" element={<PaymentConfirmationPage />} />
-                  <Route path="/payment-status" element={<PaymentConfirmationPage />} />
-                  {/* Other Pages */}
-                  <Route path="/about" element={<About />} />
-                  <Route path="/publish" element={<PublishWithUs />} />
-                  <Route path="/services" element={<ProductsServices />} />
-                  {/* Auth Routes */}
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/signin" element={<Auth />} />
-                  <Route path="/login" element={<Auth />} />
-                  <Route path="/profile-setup" element={<ProfileSetup />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route
-                    path="/reset-password"
-                    element={
-                      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
-                        <ResetPassword />
-                      </Suspense>
-                    }
-                  />
-                  {/* Content Management Routes */}
-                  <Route path="/upload" element={<ContentUpload />} />
-                  <Route path="/content-management" element={<ContentManagement />} />
-                  <Route path="/content/:id" element={<ContentViewPage />} />
-                  <Route path="/content/update/:id" element={<ContentUpdatePage />} />
-                  <Route path="/content/publish/:id" element={<ContentPublishButtonPage />} />
-                  <Route path="/content/delete/:id" element={<ContentDeletePage />} />
-                  <Route path="/content/delete/confirmation" element={<ContentDeleteConfirmationPage />} />
-                  <Route path="/content-search" element={<ContentSearch />} />
-                  {/* Catch-all route should be last */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </PageTransition>
->>>>>>> c4cb33db43795d2063d0f12b67ea82e17e05b62a
             </BrowserRouter>
           </CartProvider>
         </TooltipProvider>
