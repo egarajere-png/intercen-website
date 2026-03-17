@@ -1,20 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ShoppingBag, Plus, Minus, Trash2, User, MapPin, Truck, Package, CheckCircle, X } from "lucide-react";
+import {
+  ShoppingBag, Plus, Minus, Trash2,
+  User, MapPin, Truck, Package, CheckCircle
+} from "lucide-react";
 import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 
-// Types
+// ── Types ─────────────────────────────────────────────────────────────────
 interface CartItem {
   id: string;
   content_id: string;
   quantity: number;
   price: number;
   content: {
+    id: string;
     title: string;
     author: string;
     cover_image_url: string;
     stock_quantity: number;
+    is_for_sale: boolean;
+    status: string;
   };
 }
 
@@ -26,216 +32,229 @@ interface DeliveryMethod {
   description: string;
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://nnljrawwhibazudjudht.supabase.co';
+
+const DELIVERY_METHODS: DeliveryMethod[] = [
+  {
+    id: 'standard',
+    name: 'Standard Delivery',
+    cost: 500,
+    estimatedDays: '1-3 business days',
+    description: 'Regular delivery within city'
+  },
+  {
+    id: 'express',
+    name: 'Express Delivery',
+    cost: 200,
+    estimatedDays: '1-2 business days',
+    description: 'Fast delivery within city'
+  },
+  {
+    id: 'pickup',
+    name: 'Store Pickup',
+    cost: 0,
+    estimatedDays: 'Same day',
+    description: 'Pick up from our store location'
+  }
+];
+
+// ── Component ─────────────────────────────────────────────────────────────
 const Cart = () => {
   const navigate = useNavigate();
+
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+  const [cartId, setCartId] = useState<string | null>(null);
+
   // Customer Info
   const [customerInfo, setCustomerInfo] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
+    fullName: '',
+    email: '',
+    phone: '',
   });
-  
+
   // Shipping Address
   const [shippingAddress, setShippingAddress] = useState({
-    address: "",
-    city: "",
-    postalCode: "",
+    address: '',
+    city: '',
+    postalCode: '',
   });
-  
+
   // Delivery
   const [selectedDelivery, setSelectedDelivery] = useState<DeliveryMethod | null>(null);
   const [deliveryReviewed, setDeliveryReviewed] = useState(false);
-  
+
   // Discount
-  const [discountCode, setDiscountCode] = useState("");
+  const [discountCode, setDiscountCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState<{
     code: string;
     amount: number;
     type: 'percentage' | 'fixed';
   } | null>(null);
 
-  // Order Confirmation Modal State
+  // Order Confirmation
   const [orderConfirmation, setOrderConfirmation] = useState<{
     open: boolean;
     orderNumber?: string;
     orderId?: string;
   }>({ open: false });
 
-  const deliveryMethods: DeliveryMethod[] = [
-    {
-      id: 'standard',
-      name: 'Standard Delivery',
-      cost: 500,
-      estimatedDays: '1-3 business days',
-      description: 'Regular delivery within city'
-    },
-    {
-      id: 'express',
-      name: 'Express Delivery',
-      cost: 200,
-      estimatedDays: '1-2 business days',
-      description: 'Fast delivery within city'
-    },
-    {
-      id: 'pickup',
-      name: 'Store Pickup',
-      cost: 0,
-      estimatedDays: 'Same day',
-      description: 'Pick up from our store location'
-    }
-  ];
-
-  useEffect(() => {
-    checkUser();
-    fetchCart();
-  }, []);
-
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    if (user) {
-      setCustomerInfo(prev => ({
-        ...prev,
-        email: user.email || ""
-      }));
-    }
-  };
-
-  const fetchCart = async () => {
+  // ── Fetch cart via Edge Function ──────────────────────────────────────
+  const fetchCart = useCallback(async () => {
     try {
       setLoading(true);
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (!user) {
+      if (!session) {
+        // Not logged in — clear cart display but don't wipe stored data
+        setCartItems([]);
+        setCartId(null);
+        setUser(null);
+        return;
+      }
+
+      setUser(session.user);
+      setCustomerInfo(prev => ({
+        ...prev,
+        email: prev.email || session.user.email || ''
+      }));
+
+      // Call the cart-get Edge Function
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/cart-get`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Cart fetch failed:', errorData);
         setCartItems([]);
         return;
       }
 
-      // First get the user's active cart
-      const { data: cart, error: cartError } = await supabase
-        .from('carts')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .single();
+      const data = await response.json();
+      console.log('Cart data received:', data);
 
-      if (cartError || !cart) {
-        setCartItems([]);
-        return;
-      }
+      setCartId(data.cart?.id ?? null);
+      setCartItems(data.items ?? []);
 
-      // Then get the cart items with content details
-      const { data: items, error: itemsError } = await supabase
-        .from('cart_items')
-        .select(`
-          id,
-          content_id,
-          quantity,
-          price,
-          content:contents (
-            title,
-            author,
-            cover_image_url,
-            stock_quantity
-          )
-        `)
-        .eq('cart_id', cart.id);
-
-      if (itemsError) throw itemsError;
-
-      setCartItems(items || []);
     } catch (error) {
       console.error('Error fetching cart:', error);
+      setCartItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  // ── On mount: fetch cart + listen to auth changes ─────────────────────
+  useEffect(() => {
+    fetchCart();
+
+    // Re-fetch when user signs in; preserve cart across refreshes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          setUser(session.user);
+          setCustomerInfo(prev => ({
+            ...prev,
+            email: prev.email || session.user.email || ''
+          }));
+          await fetchCart();
+        } else if (event === 'SIGNED_OUT') {
+          setCartItems([]);
+          setCartId(null);
+          setUser(null);
+        }
+        // TOKEN_REFRESHED — silently re-fetch to ensure fresh token is used
+        if (event === 'TOKEN_REFRESHED' && session) {
+          await fetchCart();
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchCart]);
+
+  // ── Update quantity (direct DB for optimistic UX) ─────────────────────
   const updateQuantity = async (itemId: string, newQuantity: number) => {
     if (newQuantity < 1) {
       removeItem(itemId);
       return;
     }
 
-    try {
-      // Optimistic UI update
-      setCartItems(prev =>
-        prev.map(item =>
-          item.id === itemId ? { ...item, quantity: newQuantity } : item
-        )
-      );
+    // Optimistic update
+    setCartItems(prev =>
+      prev.map(item => item.id === itemId ? { ...item, quantity: newQuantity } : item)
+    );
 
+    try {
       const { error } = await supabase
         .from('cart_items')
         .update({ quantity: newQuantity })
         .eq('id', itemId);
 
       if (error) throw error;
-
     } catch (error) {
       console.error('Error updating quantity:', error);
-      // Revert optimistic update on failure
-      await fetchCart();
+      await fetchCart(); // revert on failure
     }
   };
 
+  // ── Remove item ───────────────────────────────────────────────────────
   const removeItem = async (itemId: string) => {
-    try {
-      // Optimistic UI update
-      setCartItems(prev => prev.filter(item => item.id !== itemId));
+    // Optimistic update
+    setCartItems(prev => prev.filter(item => item.id !== itemId));
 
+    try {
       const { error } = await supabase
         .from('cart_items')
         .delete()
         .eq('id', itemId);
 
       if (error) throw error;
-
     } catch (error) {
       console.error('Error removing item:', error);
-      // Revert optimistic update on failure
-      await fetchCart();
+      await fetchCart(); // revert on failure
     }
   };
 
+  // ── Apply discount ────────────────────────────────────────────────────
   const applyDiscount = () => {
     if (discountCode.toUpperCase() === 'SAVE10') {
-      setAppliedDiscount({
-        code: 'SAVE10',
-        amount: 10,
-        type: 'percentage'
-      });
+      setAppliedDiscount({ code: 'SAVE10', amount: 10, type: 'percentage' });
+    } else {
+      alert('Invalid discount code');
     }
   };
 
+  // ── Checkout ──────────────────────────────────────────────────────────
   const handleCheckout = async () => {
     if (!user) {
       alert('Please log in to checkout');
       navigate('/auth');
       return;
     }
-
     if (!customerInfo.fullName || !customerInfo.phone) {
       alert('Please fill in all customer information');
       return;
     }
-
     if (!shippingAddress.address || !shippingAddress.city) {
-      alert('Please provide shipping address');
+      alert('Please provide a shipping address');
       return;
     }
-
     if (!selectedDelivery) {
       alert('Please select a delivery method');
       return;
     }
-
     if (!deliveryReviewed) {
       alert('Please review and confirm delivery details');
       return;
@@ -245,7 +264,6 @@ const Cart = () => {
       setIsProcessing(true);
 
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
       if (sessionError || !session) {
         alert('Session expired. Please log in again.');
         navigate('/auth');
@@ -267,28 +285,19 @@ const Cart = () => {
         discount_code: appliedDiscount?.code || undefined,
       };
 
-      console.log('Initiating checkout with data:', checkoutData);
-
       const { data, error } = await supabase.functions.invoke('checkout-initiate', {
         body: checkoutData,
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
       if (error) {
-        console.error('Checkout error:', error);
         alert(error.message || 'Failed to initiate checkout');
         return;
       }
-
-      if (!data || !data.success) {
-        console.error('Checkout failed:', data);
+      if (!data?.success) {
         alert(data?.error || 'Checkout failed');
         return;
       }
-
-      console.log('Order created successfully:', data);
 
       setOrderConfirmation({
         open: true,
@@ -298,13 +307,23 @@ const Cart = () => {
 
     } catch (error: any) {
       console.error('Checkout error:', error);
-      alert(error.message || 'An unexpected error occurred during checkout');
+      alert(error.message || 'An unexpected error occurred');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Modal component
+  // ── Computed totals ───────────────────────────────────────────────────
+  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const discountAmount = appliedDiscount
+    ? appliedDiscount.type === 'percentage'
+      ? (subtotal * appliedDiscount.amount) / 100
+      : appliedDiscount.amount
+    : 0;
+  const deliveryCost = selectedDelivery?.cost ?? 0;
+  const total = subtotal - discountAmount + deliveryCost;
+
+  // ── Order Confirmation Modal ──────────────────────────────────────────
   const OrderConfirmationModal = () => (
     orderConfirmation.open ? (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
@@ -312,7 +331,9 @@ const Cart = () => {
           <CheckCircle className="mx-auto text-green-500 mb-4" size={48} />
           <h2 className="text-2xl font-bold mb-2">Order Placed!</h2>
           <p className="mb-4">Your order was created successfully.</p>
-          <p className="mb-4 font-semibold">Order Number: <span className="text-primary">{orderConfirmation.orderNumber}</span></p>
+          <p className="mb-4 font-semibold">
+            Order Number: <span className="text-primary">{orderConfirmation.orderNumber}</span>
+          </p>
           <button
             className="bg-primary text-white px-6 py-2 rounded-lg font-semibold hover:bg-primary/90 w-full"
             onClick={() => {
@@ -329,21 +350,13 @@ const Cart = () => {
     ) : null
   );
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const discountAmount = appliedDiscount 
-    ? appliedDiscount.type === 'percentage' 
-      ? (subtotal * appliedDiscount.amount) / 100
-      : appliedDiscount.amount
-    : 0;
-  const deliveryCost = selectedDelivery?.cost || 0;
-  const total = subtotal - discountAmount + deliveryCost;
-
+  // ── Loading state ─────────────────────────────────────────────────────
   if (loading) {
     return (
       <Layout>
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
             <p>Loading cart...</p>
           </div>
         </div>
@@ -351,11 +364,11 @@ const Cart = () => {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <Layout>
-      {/* Order Confirmation Modal */}
       <OrderConfirmationModal />
-      
+
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3 mb-8">
@@ -377,22 +390,28 @@ const Cart = () => {
             </div>
           ) : (
             <div className="grid lg:grid-cols-3 gap-8">
-              {/* Left Column - Cart Items & Forms */}
+              {/* ── Left Column ── */}
               <div className="lg:col-span-2 space-y-6">
+
                 {/* Cart Items */}
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  <h2 className="text-xl font-semibold mb-4">Cart Items ({cartItems.length})</h2>
+                  <h2 className="text-xl font-semibold mb-4">
+                    Cart Items ({cartItems.length})
+                  </h2>
                   <div className="space-y-4">
                     {cartItems.map((item) => (
                       <div key={item.id} className="flex gap-4 border-b pb-4 last:border-b-0">
                         <img
-                          src={item.content.cover_image_url}
-                          alt={item.content.title}
+                          src={item.content?.cover_image_url || '/placeholder-book.png'}
+                          alt={item.content?.title || 'Book'}
                           className="w-20 h-28 object-cover rounded"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/placeholder-book.png';
+                          }}
                         />
                         <div className="flex-1">
-                          <h3 className="font-semibold">{item.content.title}</h3>
-                          <p className="text-sm text-gray-600">{item.content.author}</p>
+                          <h3 className="font-semibold">{item.content?.title}</h3>
+                          <p className="text-sm text-gray-600">{item.content?.author}</p>
                           <p className="text-primary font-semibold mt-1">
                             KSh {item.price.toLocaleString()}
                           </p>
@@ -407,7 +426,10 @@ const Cart = () => {
                             <button
                               onClick={() => updateQuantity(item.id, item.quantity + 1)}
                               className="p-1 rounded hover:bg-gray-100"
-                              disabled={item.quantity >= item.content.stock_quantity}
+                              disabled={
+                                item.content?.stock_quantity != null &&
+                                item.quantity >= item.content.stock_quantity
+                              }
                             >
                               <Plus className="h-4 w-4" />
                             </button>
@@ -513,7 +535,7 @@ const Cart = () => {
                     <h2 className="text-xl font-semibold">Delivery Method</h2>
                   </div>
                   <div className="space-y-3">
-                    {deliveryMethods.map((method) => (
+                    {DELIVERY_METHODS.map((method) => (
                       <div
                         key={method.id}
                         onClick={() => setSelectedDelivery(method)}
@@ -547,38 +569,63 @@ const Cart = () => {
                           onChange={(e) => setDeliveryReviewed(e.target.checked)}
                           className="w-4 h-4 text-primary"
                         />
-                        <span className="text-sm">I have reviewed and confirmed the delivery details</span>
+                        <span className="text-sm">
+                          I have reviewed and confirmed the delivery details
+                        </span>
                       </label>
                     </div>
                   )}
                 </div>
+
+                {/* Discount Code */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-semibold mb-4">Discount Code</h2>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={discountCode}
+                      onChange={(e) => setDiscountCode(e.target.value)}
+                      className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      placeholder="Enter discount code"
+                    />
+                    <button
+                      onClick={applyDiscount}
+                      className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {appliedDiscount && (
+                    <p className="text-green-600 text-sm mt-2">
+                      ✓ Discount code <strong>{appliedDiscount.code}</strong> applied —{' '}
+                      {appliedDiscount.amount}% off
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {/* Right Column - Order Summary */}
+              {/* ── Right Column — Order Summary ── */}
               <div className="lg:col-span-1">
                 <div className="bg-white rounded-lg shadow-md p-6 sticky top-4">
                   <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
-                  
+
                   <div className="space-y-3 mb-4">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Subtotal</span>
                       <span className="font-semibold">KSh {subtotal.toLocaleString()}</span>
                     </div>
-                    
                     {appliedDiscount && (
                       <div className="flex justify-between text-green-600">
                         <span>Discount ({appliedDiscount.code})</span>
                         <span>-KSh {discountAmount.toLocaleString()}</span>
                       </div>
                     )}
-                    
                     <div className="flex justify-between">
                       <span className="text-gray-600">Delivery</span>
                       <span className="font-semibold">
                         {deliveryCost === 0 ? 'Free' : `KSh ${deliveryCost.toLocaleString()}`}
                       </span>
                     </div>
-                    
                     <div className="border-t pt-3">
                       <div className="flex justify-between text-lg font-bold">
                         <span>Total</span>
@@ -594,7 +641,7 @@ const Cart = () => {
                   >
                     {isProcessing ? (
                       <>
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                         Processing...
                       </>
                     ) : (
@@ -610,7 +657,6 @@ const Cart = () => {
                       Please log in to checkout
                     </p>
                   )}
-                  
                   {user && !deliveryReviewed && (
                     <p className="text-sm text-amber-600 mt-2 text-center">
                       Please review delivery details
