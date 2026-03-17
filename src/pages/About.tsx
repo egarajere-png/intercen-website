@@ -71,7 +71,7 @@ const team = [
     name: 'Robert Mutugi',
     role: 'Design Operations Lead',
     // expected file: src/assets/team/robert-mutugi.jpg
-    image: new URL('../assets/team/robert-mutugi.jpg', import.meta.url).href,
+    image: new URL('', import.meta.url).href,
   },
   {
     name: 'Betty Atiemo',
