@@ -1,0 +1,12 @@
+{
+  "lint": {
+    "include": ["supabase/functions/"],
+    "rules": {
+      "exclude": [
+        "no-explicit-any",
+        "no-window",
+        "no-window-prefix"
+      ]
+    }
+  }
+}
