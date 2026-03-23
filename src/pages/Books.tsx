@@ -85,7 +85,7 @@ const Books = () => {
       setError(null);
 
       // Build filters for edge function, only include non-empty values
-      let filters: any = {};
+      const filters: any = {};
 
       // Filter by category - use category_slug instead of category_id
       if (selectedCategories.length === 1) {
