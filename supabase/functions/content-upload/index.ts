@@ -13,8 +13,8 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const MAX_COVER_SIZE = 10 * 1024 * 1024    // 10MB
-const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_COVER_SIZE = 10 * 1024 * 1024
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024
 
 const ALLOWED_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 const ALLOWED_BACKPAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp']
@@ -22,7 +22,6 @@ const ALLOWED_BACKPAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 const validCoverExtensions = ['jpg', 'jpeg', 'png', 'webp']
 const validBackpageExtensions = ['jpg', 'jpeg', 'png', 'webp']
 
-// MIME type fallback mapping (extension → MIME type)
 const mimeMap: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -31,7 +30,6 @@ const mimeMap: Record<string, string> = {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight immediately - BEFORE any other logic
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
       status: 200,
@@ -72,7 +70,6 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id)
 
-    // Parse form
     let form
     try {
       form = await multiParser(req)
@@ -112,7 +109,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Special validation for ebook content type
     const isEbookType = content_type.toLowerCase() === 'ebook'
     
     if (isEbookType) {
@@ -133,7 +129,6 @@ Deno.serve(async (req) => {
 
     console.log('Validation passed')
 
-    // Validate cover if present
     if (coverFile) {
       const coverExt = coverFile.filename.split('.').pop()?.toLowerCase() || ''
       const isValidCoverMime = coverFile.type && ALLOWED_COVER_MIMES.includes(coverFile.type)
@@ -159,7 +154,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Validate backpage if present
     if (backpageFile) {
       const backpageExt = backpageFile.filename.split('.').pop()?.toLowerCase() || ''
       const isValidBackpageMime = backpageFile.type && ALLOWED_BACKPAGE_MIMES.includes(backpageFile.type)
@@ -185,7 +179,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Handle cover image
     let cover_image_url: string | null = null
     if (coverFile) {
       try {
@@ -217,7 +210,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Handle backpage image
     let backpage_image_url: string | null = null
     if (backpageFile) {
       try {
@@ -229,7 +221,7 @@ Deno.serve(async (req) => {
 
         const backpagePath = `${user.id}/backpages/${crypto.randomUUID()}.${backpageExt}`
         const { error: backpageErr } = await supabaseAdmin.storage
-          .from('book-covers')  // Using same bucket as covers, but in separate folder
+          .from('book-covers')
           .upload(backpagePath, backpageFile.content, {
             contentType: effectiveBackpageMime,
             upsert: false,
@@ -249,13 +241,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Insert database record
     const insertData = {
       title,
       subtitle: (f.subtitle as string)?.trim() || null,
       description: (f.description as string)?.trim() || null,
       content_type,
-      format: null, // No file uploaded, so format is null
+      format: null,
       author: (f.author as string)?.trim() || null,
       publisher: (f.publisher as string)?.trim() || null,
       published_date: (f.published_date as string) || null,
@@ -295,13 +286,11 @@ Deno.serve(async (req) => {
     if (dbError) {
       console.error('DB error:', dbError)
       
-      // Translate database errors to user-friendly messages
       let userMessage = 'Failed to save content. Please try again.'
-      let errorCode = dbError.code
+      const errorCode = dbError.code
       
-      // Handle specific PostgreSQL error codes
       switch (errorCode) {
-        case '23505': // Unique constraint violation
+        case '23505':
           if (dbError.message.includes('isbn')) {
             userMessage = `The ISBN "${insertData.isbn}" is already in use. Please use a different ISBN or leave it empty.`
           } else if (dbError.message.includes('title')) {
@@ -311,7 +300,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23514': // Check constraint violation
+        case '23514':
           if (dbError.message.includes('content_type')) {
             userMessage = 'Invalid content type selected. Please choose a valid content type.'
           } else if (dbError.message.includes('format')) {
@@ -325,7 +314,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23503': // Foreign key violation
+        case '23503':
           if (dbError.message.includes('category_id')) {
             userMessage = 'The selected category does not exist. Please choose a valid category.'
           } else if (dbError.message.includes('organization_id')) {
@@ -335,7 +324,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23502': // Not null violation
+        case '23502':
           if (dbError.message.includes('title')) {
             userMessage = 'Title is required. Please provide a title for your content.'
           } else if (dbError.message.includes('content_type')) {
@@ -345,12 +334,11 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '22001': // String data too long
+        case '22001':
           userMessage = 'One or more fields exceed the maximum length. Please shorten your input.'
           break
           
         default:
-          // Generic database error
           userMessage = 'Unable to save content due to a database error. Please verify your input and try again.'
       }
       

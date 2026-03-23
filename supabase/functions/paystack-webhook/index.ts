@@ -9,7 +9,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-paystack-signature',
 };
 
-// Verify Paystack webhook signature
 function verifyPaystackSignature(payload: string, signature: string): boolean {
   const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
   
@@ -23,7 +22,6 @@ function verifyPaystackSignature(payload: string, signature: string): boolean {
     const keyData = encoder.encode(paystackSecretKey);
     const payloadData = encoder.encode(payload);
     
-    // Create HMAC SHA512 hash
     const key = crypto.subtle.importKey(
       'raw',
       keyData,
@@ -51,12 +49,10 @@ function verifyPaystackSignature(payload: string, signature: string): boolean {
   }
 }
 
-// Release reserved stock
-async function releaseStock(supabase: any, orderId: string): Promise<void> {
+async function releaseStock(supabase: ReturnType<typeof createClient>, orderId: string): Promise<void> {
   console.log('Releasing stock for order:', orderId);
 
   try {
-    // Get order items
     const { data: orderItems, error: itemsError } = await supabase
       .from('order_items')
       .select('content_id, quantity')
@@ -69,7 +65,6 @@ async function releaseStock(supabase: any, orderId: string): Promise<void> {
 
     console.log('Order items to release:', orderItems.length);
 
-    // Release stock for each item
     for (const item of orderItems) {
       const { error: updateError } = await supabase
         .from('content')
@@ -93,7 +88,6 @@ async function releaseStock(supabase: any, orderId: string): Promise<void> {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -102,7 +96,6 @@ serve(async (req) => {
   console.log('=== Paystack Webhook Received ===');
 
   try {
-    // Get the signature from headers
     const signature = req.headers.get('x-paystack-signature');
     
     if (!signature) {
@@ -113,11 +106,9 @@ serve(async (req) => {
       );
     }
 
-    // Get raw body for signature verification
     const rawBody = await req.text();
     console.log('Webhook payload received, length:', rawBody.length);
 
-    // Verify signature
     const isValid = await verifyPaystackSignature(rawBody, signature);
     
     if (!isValid) {
@@ -130,7 +121,6 @@ serve(async (req) => {
 
     console.log('Signature verified successfully');
 
-    // Parse the payload
     const payload = JSON.parse(rawBody);
     const { event, data } = payload;
 
@@ -138,12 +128,10 @@ serve(async (req) => {
     console.log('Transaction reference:', data?.reference);
     console.log('Transaction status:', data?.status);
 
-    // Create Supabase client with service role for webhook operations
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Extract order information from metadata or reference
     const orderId = data?.metadata?.order_id;
     const orderNumber = data?.metadata?.order_number;
     const reference = data?.reference;
@@ -156,7 +144,6 @@ serve(async (req) => {
       );
     }
 
-    // Find the order
     let orderQuery = supabase.from('orders').select('*');
     
     if (orderId) {
@@ -169,7 +156,6 @@ serve(async (req) => {
 
     if (orderError || !order) {
       console.error('Order not found:', { orderId, orderNumber, reference, error: orderError });
-      // Still return 200 to acknowledge webhook
       return new Response(
         JSON.stringify({ 
           message: 'Order not found but webhook acknowledged',
@@ -188,12 +174,10 @@ serve(async (req) => {
       currentPaymentStatus: order.payment_status,
     });
 
-    // Handle different webhook events
     switch (event) {
-      case 'charge.success':
+      case 'charge.success': {
         console.log('Processing successful payment...');
         
-        // Verify transaction one more time with Paystack API
         const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
         const verifyResponse = await fetch(
           `https://api.paystack.co/transaction/verify/${reference}`,
@@ -213,7 +197,6 @@ serve(async (req) => {
         });
 
         if (verifyData.status && verifyData.data?.status === 'success') {
-          // Verify amount matches
           const expectedAmount = Math.round(order.total_price * 100);
           const paidAmount = verifyData.data.amount;
 
@@ -238,7 +221,6 @@ serve(async (req) => {
             );
           }
 
-          // Update order to paid
           const { error: updateError } = await supabase
             .from('orders')
             .update({
@@ -255,7 +237,6 @@ serve(async (req) => {
             console.log('Order updated to paid status');
           }
 
-          // Call checkout-complete function
           console.log('Calling checkout-complete function...');
           try {
             const { data: completeData, error: completeError } = await supabase.functions.invoke(
@@ -277,11 +258,11 @@ serve(async (req) => {
           console.warn('Payment verification failed:', verifyData);
         }
         break;
+      }
 
       case 'charge.failed':
         console.log('Processing failed payment...');
         
-        // Update order to failed
         await supabase
           .from('orders')
           .update({
@@ -292,7 +273,6 @@ serve(async (req) => {
           })
           .eq('id', order.id);
 
-        // Release reserved stock
         await releaseStock(supabase, order.id);
 
         console.log('Order marked as failed and stock released');
@@ -301,7 +281,6 @@ serve(async (req) => {
       case 'charge.abandoned':
         console.log('Processing abandoned payment...');
         
-        // Update order status
         await supabase
           .from('orders')
           .update({
@@ -312,7 +291,6 @@ serve(async (req) => {
           })
           .eq('id', order.id);
 
-        // Release reserved stock
         await releaseStock(supabase, order.id);
 
         console.log('Order marked as abandoned and stock released');
@@ -321,7 +299,6 @@ serve(async (req) => {
       case 'charge.pending':
         console.log('Payment is pending...');
         
-        // Keep status as pending
         await supabase
           .from('orders')
           .update({
@@ -342,7 +319,6 @@ serve(async (req) => {
       orderId: order.id,
     });
 
-    // Always return 200 to acknowledge webhook
     return new Response(
       JSON.stringify({ message: 'Webhook processed successfully' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -356,7 +332,6 @@ serve(async (req) => {
       stack: error.stack,
     });
     
-    // Still return 200 to acknowledge webhook (prevent retries for invalid data)
     return new Response(
       JSON.stringify({ 
         message: 'Webhook acknowledged but processing failed',

@@ -10,8 +10,8 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
-const MAX_COVER_SIZE = 10 * 1024 * 1024 // 10MB
-const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_COVER_SIZE = 10 * 1024 * 1024
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024
 
 const ALLOWED_COVER_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -39,7 +39,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Authenticate user
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -63,7 +62,6 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id)
 
-    // Parse form data
     let form
     try {
       form = await multiParser(req)
@@ -94,7 +92,6 @@ Deno.serve(async (req) => {
 
     console.log('Updating content:', content_id)
 
-    // Fetch existing content
     const { data: existingContent, error: fetchError } = await supabaseAdmin
       .from('content')
       .select('*')
@@ -110,11 +107,9 @@ Deno.serve(async (req) => {
 
     console.log('Existing content found:', existingContent.title)
 
-    // Verify permissions: user is uploader OR org admin
     let hasPermission = existingContent.uploaded_by === user.id
 
     if (!hasPermission && existingContent.organization_id) {
-      // Check if user is admin of the organization
       const { data: orgMember } = await supabaseAdmin
         .from('organization_members')
         .select('role')
@@ -136,13 +131,11 @@ Deno.serve(async (req) => {
 
     console.log('Permission granted')
 
-    // Handle image replacements
     const newCoverFile = form.files?.cover_image
     const newBackpageFile = form.files?.backpage_image
     let new_cover_url = existingContent.cover_image_url
     let new_backpage_url = existingContent.backpage_image_url
 
-    // Handle cover image replacement
     if (newCoverFile) {
       console.log('New cover image detected')
 
@@ -192,7 +185,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Handle backpage image replacement
     if (newBackpageFile) {
       console.log('New backpage image detected')
 
@@ -242,12 +234,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build update object
-    const updates: any = {
+    const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     }
 
-    // Update metadata fields if provided
     if (f.title) updates.title = (f.title as string).trim()
     if (f.subtitle) updates.subtitle = (f.subtitle as string).trim()
     if (f.description) updates.description = (f.description as string).trim()
@@ -272,10 +262,6 @@ Deno.serve(async (req) => {
     if (f.status) updates.status = (f.status as string)
     if (f.page_count) updates.page_count = parseInt(f.page_count as string)
 
-    // REMOVED: tags handling from updates object
-    // Tags are handled separately through the content_tags junction table
-
-    // Handle meta_keywords
     if (f.meta_keywords) {
       updates.meta_keywords = (f.meta_keywords as string)
         .split(',')
@@ -283,7 +269,6 @@ Deno.serve(async (req) => {
         .filter(Boolean)
     }
 
-    // Update image URLs if replaced
     if (newCoverFile) {
       updates.cover_image_url = new_cover_url
     }
@@ -292,14 +277,12 @@ Deno.serve(async (req) => {
       updates.backpage_image_url = new_backpage_url
     }
 
-    // Set published_at if status changed to published
     if (updates.status === 'published' && existingContent.status !== 'published') {
       updates.published_at = new Date().toISOString()
     }
 
     console.log('Updating database with fields:', Object.keys(updates))
 
-    // Update content
     const { data: updatedContent, error: updateError } = await supabaseAdmin
       .from('content')
       .update(updates)
@@ -310,13 +293,11 @@ Deno.serve(async (req) => {
     if (updateError) {
       console.error('Update error:', updateError)
       
-      // Translate database errors to user-friendly messages
       let userMessage = 'Failed to update content. Please try again.'
-      let errorCode = updateError.code
+      const errorCode = updateError.code
       
-      // Handle specific PostgreSQL error codes
       switch (errorCode) {
-        case '23505': // Unique constraint violation
+        case '23505':
           if (updateError.message.includes('isbn')) {
             userMessage = `The ISBN "${updates.isbn}" is already in use by another content item. Please use a different ISBN.`
           } else if (updateError.message.includes('title')) {
@@ -326,7 +307,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23514': // Check constraint violation
+        case '23514':
           if (updateError.message.includes('content_type')) {
             userMessage = 'Invalid content type selected. Please choose a valid content type.'
           } else if (updateError.message.includes('format')) {
@@ -340,7 +321,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23503': // Foreign key violation
+        case '23503':
           if (updateError.message.includes('category_id')) {
             userMessage = 'The selected category does not exist. Please choose a valid category.'
           } else if (updateError.message.includes('organization_id')) {
@@ -350,7 +331,7 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '23502': // Not null violation
+        case '23502':
           if (updateError.message.includes('title')) {
             userMessage = 'Title is required. Please provide a title for your content.'
           } else if (updateError.message.includes('content_type')) {
@@ -360,12 +341,11 @@ Deno.serve(async (req) => {
           }
           break
           
-        case '22001': // String data too long
+        case '22001':
           userMessage = 'One or more fields exceed the maximum length. Please shorten your input.'
           break
           
         default:
-          // Generic database error
           userMessage = 'Unable to update content due to a database error. Please verify your input and try again.'
       }
       
@@ -379,7 +359,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Update search vector if title or description changed
     if (updates.title || updates.description) {
       console.log('Updating search vector...')
       try {
@@ -389,11 +368,9 @@ Deno.serve(async (req) => {
         console.log('Search vector updated')
       } catch (searchErr) {
         console.warn('Failed to update search vector:', searchErr)
-        // Continue anyway - search update is not critical
       }
     }
 
-    // Handle tag updates if provided (through content_tags junction table)
     if (f.tag_ids) {
       try {
         const tagIds = (f.tag_ids as string)
@@ -401,13 +378,11 @@ Deno.serve(async (req) => {
           .map(id => id.trim())
           .filter(Boolean)
 
-        // Delete existing tags
         await supabaseAdmin
           .from('content_tags')
           .delete()
           .eq('content_id', content_id)
 
-        // Insert new tags
         if (tagIds.length > 0) {
           const tagInserts = tagIds.map(tag_id => ({
             content_id: content_id,
@@ -422,7 +397,6 @@ Deno.serve(async (req) => {
         console.log('Tags updated:', tagIds.length)
       } catch (tagErr) {
         console.warn('Failed to update tags:', tagErr)
-        // Continue anyway - tag update is not critical
       }
     }
 

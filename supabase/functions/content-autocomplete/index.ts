@@ -82,13 +82,11 @@ interface AutocompleteResponse {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -99,18 +97,15 @@ serve(async (req) => {
       }
     );
 
-    // Get authenticated user
     const { data: { user } } = await supabaseClient.auth.getUser();
     const userId = user?.id || null;
 
-    // Parse request body
     const requestBody: AutocompleteRequest = await req.json();
     const query = requestBody.query?.trim() || "";
     const limit = requestBody.limit || 12;
     const includeRecent = requestBody.include_recent !== false;
     const includePersonalized = requestBody.include_personalized !== false;
 
-    // If query is empty, return trending/popular/recent suggestions
     if (query.length < 2) {
       const defaultSuggestions = await getDefaultSuggestions(
         supabaseClient, 
@@ -133,10 +128,8 @@ serve(async (req) => {
       );
     }
 
-    // Check for spelling corrections
     const spellingCorrection = await getSpellingCorrection(supabaseClient, query);
 
-    // Run all suggestion queries in parallel
     const [
       titleSuggestions, 
       authorSuggestions,
@@ -153,8 +146,6 @@ serve(async (req) => {
       includePersonalized && userId ? getPersonalizedSuggestions(supabaseClient, userId, query, Math.ceil(limit * 0.15)) : Promise.resolve([]),
     ]);
 
-    // Combine and prioritize suggestions
-    // Priority: Recent > Personalized > Titles > Authors > Popular > Tags
     const allSuggestions: Suggestion[] = [
       ...recentSearches,
       ...personalizedSuggestions,
@@ -195,9 +186,8 @@ serve(async (req) => {
   }
 });
 
-// Get title suggestions from published content with rich previews
 async function getTitleSuggestions(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<TitleSuggestion[]> {
@@ -232,14 +222,12 @@ async function getTitleSuggestions(
   }
 }
 
-// Get author suggestions
 async function getAuthorSuggestions(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<AuthorSuggestion[]> {
   try {
-    // Get distinct authors matching the query
     const { data, error } = await supabase
       .from("content")
       .select("author")
@@ -247,21 +235,19 @@ async function getAuthorSuggestions(
       .eq("visibility", "public")
       .not("author", "is", null)
       .ilike("author", `${query}%`)
-      .limit(100); // Get more to aggregate
+      .limit(100);
 
     if (error || !data) {
       console.error("Author suggestions error:", error);
       return [];
     }
 
-    // Count content per author
     const authorCounts = new Map<string, number>();
-    data.forEach((item: any) => {
+    data.forEach((item: { author: string }) => {
       const author = item.author.trim();
       authorCounts.set(author, (authorCounts.get(author) || 0) + 1);
     });
 
-    // Convert to array and sort by content count
     return Array.from(authorCounts.entries())
       .map(([author, count]) => ({
         type: 'author' as const,
@@ -276,9 +262,8 @@ async function getAuthorSuggestions(
   }
 }
 
-// Get popular searches from search logs
 async function getPopularSearches(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<PopularSearch[]> {
@@ -292,7 +277,7 @@ async function getPopularSearches(
       return await getPopularSearchesDirect(supabase, query, limit);
     }
 
-    return (data || []).map((item: { tag_name: string; tag_slug: string; usage_count: number }) => ({
+    return (data || []).map((item: { search_query: string; search_count: number }) => ({
       type: 'popular' as const,
       value: item.search_query,
       count: item.search_count,
@@ -303,9 +288,8 @@ async function getPopularSearches(
   }
 }
 
-// Fallback method for popular searches
 async function getPopularSearchesDirect(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<PopularSearch[]> {
@@ -321,7 +305,7 @@ async function getPopularSearchesDirect(
     if (error || !data) return [];
 
     const counts = new Map<string, number>();
-    data.forEach((item: { author: string }) => {
+    data.forEach((item: { search_query: string }) => {
       const q = item.search_query.toLowerCase().trim();
       counts.set(q, (counts.get(q) || 0) + 1);
     });
@@ -340,9 +324,8 @@ async function getPopularSearchesDirect(
   }
 }
 
-// Get recent searches for the current user
 async function getRecentSearches(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   userId: string,
   query: string,
   limit: number
@@ -356,14 +339,13 @@ async function getRecentSearches(
       .not("search_query", "eq", "")
       .ilike("search_query", `${query}%`)
       .order("created_at", { ascending: false })
-      .limit(limit * 2); // Get more to deduplicate
+      .limit(limit * 2);
 
     if (error || !data) {
       console.error("Recent searches error:", error);
       return [];
     }
 
-    // Deduplicate by search_query (keep most recent)
     const seen = new Set<string>();
     const uniqueSearches: RecentSearch[] = [];
 
@@ -387,9 +369,8 @@ async function getRecentSearches(
   }
 }
 
-// Get trending tags
 async function getTrendingTags(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<TrendingTag[]> {
@@ -403,7 +384,7 @@ async function getTrendingTags(
       return await getTrendingTagsDirect(supabase, query, limit);
     }
 
-    return (data || []).map((item: { search_query: string; search_count: number }) => ({
+    return (data || []).map((item: { tag_name: string; tag_slug: string; usage_count: number }) => ({
       type: 'tag' as const,
       value: item.tag_name,
       slug: item.tag_slug,
@@ -415,9 +396,8 @@ async function getTrendingTags(
   }
 }
 
-// Fallback method for trending tags
 async function getTrendingTagsDirect(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string,
   limit: number
 ): Promise<TrendingTag[]> {
@@ -436,7 +416,7 @@ async function getTrendingTagsDirect(
     if (error || !data) return [];
 
     return data
-      .map((tag: any) => ({
+      .map((tag: { name: string; slug: string; content_tags?: { count: number }[] }) => ({
         type: 'tag' as const,
         value: tag.name,
         slug: tag.slug,
@@ -450,15 +430,13 @@ async function getTrendingTagsDirect(
   }
 }
 
-// Get personalized suggestions based on user's interests
 async function getPersonalizedSuggestions(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   userId: string,
   query: string,
   limit: number
 ): Promise<PersonalizedSuggestion[]> {
   try {
-    // Get user's search history to determine interests
     const { data: searchHistory } = await supabase
       .from("search_logs")
       .select("search_query")
@@ -468,9 +446,8 @@ async function getPersonalizedSuggestions(
 
     if (!searchHistory || searchHistory.length === 0) return [];
 
-    // Extract common terms from search history
     const terms = searchHistory
-      .map((s: any) => s.search_query?.toLowerCase().split(" "))
+      .map((s: { search_query: string }) => s.search_query?.toLowerCase().split(" "))
       .flat()
       .filter((t: string) => t && t.length > 3);
 
@@ -479,7 +456,6 @@ async function getPersonalizedSuggestions(
       termCounts.set(term, (termCounts.get(term) || 0) + 1);
     });
 
-    // Get top interest terms
     const topTerms = Array.from(termCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
@@ -487,14 +463,13 @@ async function getPersonalizedSuggestions(
 
     if (topTerms.length === 0) return [];
 
-    // Find content matching user's interests and current query
     const orConditions = topTerms.map(term => 
       `title.ilike.%${term}%,description.ilike.%${term}%`
     ).join(',');
 
     const { data, error } = await supabase
-    .from("content")
-    .select("id, title, cover_image_url, content_type")
+      .from("content")
+      .select("id, title, cover_image_url, content_type")
       .eq("status", "published")
       .eq("visibility", "public")
       .or(orConditions)
@@ -504,7 +479,7 @@ async function getPersonalizedSuggestions(
 
     if (error || !data) return [];
 
-    return data.map((item: any) => ({
+    return data.map((item: { id: string; title: string; cover_image_url?: string }) => ({
       type: 'personalized' as const,
       value: item.title,
       content_id: item.id,
@@ -517,22 +492,19 @@ async function getPersonalizedSuggestions(
   }
 }
 
-// Get spelling correction suggestion
 async function getSpellingCorrection(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   query: string
 ): Promise<SpellingSuggestion | null> {
   try {
-    // Get popular search terms to check against
     const { data, error } = await supabase
-    .from("search_logs")
-    .select("search_query")
+      .from("search_logs")
+      .select("search_query")
       .not("search_query", "is", null)
       .limit(1000);
 
     if (error || !data) return null;
 
-    // Build a set of known terms
     const knownTerms = new Set<string>();
     data.forEach((item: { search_query: string }) => {
       if (item.search_query) {
@@ -540,16 +512,13 @@ async function getSpellingCorrection(
       }
     });
 
-    // Check if exact match exists
     if (knownTerms.has(query.toLowerCase())) return null;
 
-    // Find closest match using simple distance calculation
     let closestMatch = "";
     let minDistance = Infinity;
 
     for (const term of knownTerms) {
       const distance = levenshteinDistance(query.toLowerCase(), term);
-      // Only suggest if distance is small (likely typo)
       if (distance > 0 && distance < 3 && distance < minDistance) {
         minDistance = distance;
         closestMatch = term;
@@ -571,7 +540,6 @@ async function getSpellingCorrection(
   }
 }
 
-// Simple Levenshtein distance for spelling correction
 function levenshteinDistance(str1: string, str2: string): number {
   const matrix: number[][] = [];
 
@@ -600,32 +568,28 @@ function levenshteinDistance(str1: string, str2: string): number {
   return matrix[str2.length][str1.length];
 }
 
-// Get default suggestions when query is empty
 async function getDefaultSuggestions(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   userId: string | null,
   limit: number,
   includeRecent: boolean,
-  includePersonalized: boolean
+  _includePersonalized: boolean
 ): Promise<Suggestion[]> {
   try {
     const suggestions: Suggestion[] = [];
 
-    // Get recent searches if user is logged in
     if (userId && includeRecent) {
       const { data: recentData } = await supabase
         .from("search_logs")
         .select("search_query, created_at")
         .eq("user_id", userId)
         .not("search_query", "is", null)
-    .from("search_logs")
-    .select("search_query, created_at")
         .order("created_at", { ascending: false })
         .limit(3);
 
       if (recentData) {
         const seen = new Set<string>();
-        recentData.forEach((item: any) => {
+        recentData.forEach((item: { search_query: string; created_at: string }) => {
           const q = item.search_query.toLowerCase().trim();
           if (!seen.has(q)) {
             seen.add(q);
@@ -638,8 +602,7 @@ async function getDefaultSuggestions(
         });
       }
     }
-      suggestions.push({
-    // Get top viewed content
+
     const { data: topContent } = await supabase
       .from("content")
       .select("id, title, author, content_type, cover_image_url, price, average_rating")
@@ -649,7 +612,7 @@ async function getDefaultSuggestions(
       .limit(4);
 
     if (topContent) {
-      topContent.forEach((item: any) => {
+      topContent.forEach((item: { id: string; title: string; author?: string; content_type?: string; cover_image_url?: string; price?: string; average_rating?: string }) => {
         suggestions.push({
           type: 'title',
           value: item.title,
@@ -663,8 +626,7 @@ async function getDefaultSuggestions(
       });
     }
 
-    // Get top tags
-      .map((tag: { name: string; slug: string; content_tags?: any[] }) => ({
+    const { data: topTags } = await supabase
       .from("tags")
       .select(`
         id,
@@ -676,7 +638,7 @@ async function getDefaultSuggestions(
 
     if (topTags) {
       topTags
-        .map((tag: { name: string; slug: string; content_tags?: any[] }) => ({
+        .map((tag: { name: string; slug: string; content_tags?: { count: number }[] }) => ({
           type: 'tag' as const,
           value: tag.name,
           slug: tag.slug,

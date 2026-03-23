@@ -13,11 +13,10 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 interface DeleteRequest {
   content_id: string
-  force_delete?: boolean // If true, delete even if has orders (admin only)
+  force_delete?: boolean
 }
 
 Deno.serve(async (req) => {
-  // CRITICAL: Handle OPTIONS request FIRST, before any other code
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
       status: 200,
@@ -35,7 +34,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Authenticate user
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -59,11 +57,10 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id)
 
-    // Parse request body
     let body: DeleteRequest
     try {
       body = await req.json()
-    } catch (e) {
+    } catch (_e) {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -81,7 +78,6 @@ Deno.serve(async (req) => {
 
     console.log(`Attempting to delete content: ${content_id}`)
 
-    // Fetch existing content
     const { data: content, error: fetchError } = await supabaseAdmin
       .from('content')
       .select('*')
@@ -97,12 +93,10 @@ Deno.serve(async (req) => {
 
     console.log('Content found:', content.title)
 
-    // Verify ownership or admin rights
     let hasPermission = content.uploaded_by === user.id
     let isAdmin = false
 
     if (!hasPermission && content.organization_id) {
-      // Check if user is admin of the organization
       const { data: orgMember } = await supabaseAdmin
         .from('organization_members')
         .select('role')
@@ -125,8 +119,7 @@ Deno.serve(async (req) => {
 
     console.log('Permission granted')
 
-    // Check if content has been purchased (has orders)
-    const { data: orders, error: ordersError } = await supabaseAdmin
+    const { data: orders, error: _ordersError } = await supabaseAdmin
       .from('order_items')
       .select('id')
       .eq('content_id', content_id)
@@ -138,21 +131,18 @@ Deno.serve(async (req) => {
       console.log('Content has purchases - checking force_delete flag')
     }
 
-    // Check if content is in any carts
-    const { data: cartItems, error: cartError } = await supabaseAdmin
+    const { data: cartItems, error: _cartError } = await supabaseAdmin
       .from('cart_items')
       .select('id')
       .eq('content_id', content_id)
 
     const inCarts = cartItems && cartItems.length > 0
 
-    // Determine if we can hard delete
     const canHardDelete = !hasPurchases || (force_delete && isAdmin)
 
     if (!canHardDelete) {
       console.log('Cannot hard delete - archiving instead')
 
-      // Soft delete: Archive the content
       const { data: archivedContent, error: archiveError } = await supabaseAdmin
         .from('content')
         .update({
@@ -177,7 +167,6 @@ Deno.serve(async (req) => {
         })
       }
 
-      // Log the archive action
       await logAudit(supabaseAdmin, {
         user_id: user.id,
         action: 'content_archived',
@@ -210,10 +199,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Proceed with hard delete
     console.log('Proceeding with hard delete...')
 
-    // Step 1: Delete files from storage
     const storageErrors: string[] = []
 
     if (content.file_url) {
@@ -264,7 +251,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2: Delete from cart_items (if any)
     if (inCarts) {
       console.log('Removing from carts...')
       const { error: cartDeleteError } = await supabaseAdmin
@@ -279,7 +265,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 3: Delete version history
     const { error: versionDeleteError } = await supabaseAdmin
       .from('content_version_history')
       .delete()
@@ -291,7 +276,6 @@ Deno.serve(async (req) => {
       console.log('Version history deleted')
     }
 
-    // Step 4: Delete content tags
     const { error: tagsDeleteError } = await supabaseAdmin
       .from('content_tags')
       .delete()
@@ -303,7 +287,6 @@ Deno.serve(async (req) => {
       console.log('Content tags deleted')
     }
 
-    // Step 5: Delete reviews (if cascade is not set up)
     const { error: reviewsDeleteError } = await supabaseAdmin
       .from('reviews')
       .delete()
@@ -315,7 +298,6 @@ Deno.serve(async (req) => {
       console.log('Reviews deleted')
     }
 
-    // Step 6: Delete the content record (this will cascade to other related tables)
     const { error: contentDeleteError } = await supabaseAdmin
       .from('content')
       .delete()
@@ -335,7 +317,6 @@ Deno.serve(async (req) => {
 
     console.log('Content deleted successfully from database')
 
-    // Log the deletion
     await logAudit(supabaseAdmin, {
       user_id: user.id,
       action: 'content_deleted',
@@ -392,20 +373,13 @@ Deno.serve(async (req) => {
   }
 })
 
-// Helper function to extract storage path from URL
 function extractStoragePath(url: string): string | null {
   try {
-    // Example URL: https://project.supabase.co/storage/v1/object/public/bucket-name/user-id/file.pdf
-    // or: https://project.supabase.co/storage/v1/object/sign/bucket-name/user-id/file.pdf?token=...
-    
     const urlObj = new URL(url)
     const pathParts = urlObj.pathname.split('/')
-    
-    // Find the index of the bucket name (after 'public' or 'sign')
     const bucketIndex = pathParts.findIndex(part => part === 'public' || part === 'sign')
     
     if (bucketIndex >= 0 && pathParts.length > bucketIndex + 2) {
-      // Everything after the bucket name is the file path
       const filePath = pathParts.slice(bucketIndex + 2).join('/')
       return filePath
     }
@@ -417,7 +391,6 @@ function extractStoragePath(url: string): string | null {
   }
 }
 
-// Helper function to determine bucket from URL
 function determineBucket(url: string): string | null {
   try {
     if (url.includes('/book-files/')) return 'book-files'
@@ -425,7 +398,6 @@ function determineBucket(url: string): string | null {
     if (url.includes('/manuscripts/')) return 'manuscripts'
     if (url.includes('/documets/')) return 'documets'
     
-    // Fallback: try to extract from URL path
     const urlObj = new URL(url)
     const pathParts = urlObj.pathname.split('/')
     const bucketIndex = pathParts.findIndex(part => part === 'public' || part === 'sign')
@@ -441,22 +413,21 @@ function determineBucket(url: string): string | null {
   }
 }
 
-// Helper function to log audit trail
 async function logAudit(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   data: {
     user_id: string
     action: string
     entity_type: string
     entity_id: string
-    details: any
+    details: Record<string, unknown>
   }
 ) {
   try {
     const auditLog = {
       ...data,
       created_at: new Date().toISOString(),
-      ip_address: null, // Could be extracted from headers if needed
+      ip_address: null,
     }
 
     const { error } = await supabase

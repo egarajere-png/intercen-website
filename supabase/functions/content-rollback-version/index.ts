@@ -17,7 +17,6 @@ interface RollbackRequest {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
       status: 200,
@@ -35,7 +34,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Authenticate user
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -59,11 +57,10 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id)
 
-    // Parse request body
     let body: RollbackRequest
     try {
       body = await req.json()
-    } catch (e) {
+    } catch (_e) {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -88,7 +85,6 @@ Deno.serve(async (req) => {
 
     console.log(`Rolling back content ${content_id} to version ${target_version}`)
 
-    // Fetch current content
     const { data: content, error: fetchError } = await supabaseAdmin
       .from('content')
       .select('*')
@@ -104,7 +100,6 @@ Deno.serve(async (req) => {
 
     console.log('Content found:', content.title)
 
-    // Verify permissions
     let hasPermission = content.uploaded_by === user.id
 
     if (!hasPermission && content.organization_id) {
@@ -129,7 +124,6 @@ Deno.serve(async (req) => {
 
     console.log('Permission granted')
 
-    // Fetch target version from history
     const { data: targetVersionData, error: versionError } = await supabaseAdmin
       .from('content_version_history')
       .select('*')
@@ -149,9 +143,7 @@ Deno.serve(async (req) => {
 
     console.log('Target version found in history')
 
-    // Save current version to history before rollback
     const currentVersion = content.version || '1.0'
-    const rollbackVersion = `${target_version}-rollback-${Date.now()}`
 
     if (content.file_url) {
       try {
@@ -172,7 +164,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Perform rollback
     const { data: rolledBackContent, error: rollbackError } = await supabaseAdmin
       .from('content')
       .update({
@@ -197,7 +188,6 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Log the rollback in version history
     await supabaseAdmin
       .from('content_version_history')
       .insert({
@@ -210,7 +200,6 @@ Deno.serve(async (req) => {
         changed_by: user.id,
       })
 
-    // Fetch updated version history
     const { data: versionHistory } = await supabaseAdmin
       .rpc('get_content_version_history', { p_content_id: content_id })
 
