@@ -381,7 +381,7 @@ const CheckoutPayment = () => {
                   <h2 className="text-xl font-semibold mb-4">Choose Payment Method</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-                    {/* M-Pesa card
+                    {/* M-Pesa card */}
                     <button
                       type="button"
                       onClick={() => {
@@ -408,7 +408,7 @@ const CheckoutPayment = () => {
                       {selectedPaymentMethod === 'mpesa' && (
                         <CheckCircle className="absolute top-3 right-3 h-5 w-5 text-green-500" />
                       )}
-                    </button> */}
+                    </button>
 
                     {/* Paystack card */}
                     <button
