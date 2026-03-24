@@ -77,6 +77,7 @@ const App = () => {
                     <Route path="/checkout/payment-success" element={<PaymentConfirmationPage />} />
                     <Route path="/payment-success" element={<PaymentConfirmationPage />} />
                     <Route path="/payment-failed" element={<PaymentConfirmationPage />} />
+                    <Route path="/payment-confirmation" element={<PaymentConfirmationPage />} />                    
                     <Route path="/payment-cancelled" element={<PaymentConfirmationPage />} />
                     <Route path="/payment-pending" element={<PaymentConfirmationPage />} />
                     <Route path="/payment-status" element={<PaymentConfirmationPage />} />
