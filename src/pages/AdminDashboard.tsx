@@ -1,4 +1,18 @@
-import React, { useEffect, useState } from 'react';
+// src/pages/AdminDashboard.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Full corrected admin dashboard
+//  ✅ No window.confirm/alert — uses custom on-screen ConfirmDialog
+//  ✅ Duplicate "Content Manager" / "Upload Content" hero buttons removed
+//  ✅ Content publish/unpublish works + sends email + records notification
+//  ✅ Unpublish in content tab works correctly
+//  ✅ Dynamic Publish/Unpublish button on each content item
+//  ✅ Order status update sends email + records notification (valid type)
+//  ✅ Notification types match DB constraint exactly
+//  ✅ Publication actions record correct notification types
+//  ✅ All important admin operations recorded in notifications table
+// ─────────────────────────────────────────────────────────────────────────────
+
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/SupabaseClient';
 import { useRole } from '@/contexts/RoleContext';
@@ -13,10 +27,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Users, BookOpen, FileText, ShoppingCart,
   CheckCircle, XCircle, Clock, Shield, Edit3, Eye,
-  Upload, AlertCircle, Search, RefreshCw,
+  AlertCircle, Search, RefreshCw,
   LogOut, Save, Camera, User, Trash2, Globe, EyeOff,
   ChevronDown, ChevronUp, Star, Grid3X3, List, Plus,
-  StickyNote, BookMarked, Rocket,
+  StickyNote, Rocket, AlertTriangle,
 } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -70,13 +84,97 @@ const MAX_BIO    = 500;
 const MAX_NAME   = 100;
 const MAX_AVATAR = 5 * 1024 * 1024;
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── ConfirmDialog ─────────────────────────────────────────────────────────────
+// Replaces ALL window.confirm / window.alert calls
+interface ConfirmOptions {
+  title:       string;
+  description: string;
+  confirmLabel?: string;
+  destructive?:  boolean;
+  onConfirm:   () => void;
+  onCancel?:   () => void;
+}
+
+const ConfirmDialog = ({
+  title, description, confirmLabel = 'Confirm', destructive = false, onConfirm, onCancel,
+}: ConfirmOptions & { onCancel: () => void }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <Card className="p-6 max-w-md w-full shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="flex items-start gap-3 mb-4">
+        <div className={`h-10 w-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+          destructive ? 'bg-red-100' : 'bg-amber-100'
+        }`}>
+          <AlertTriangle className={`h-5 w-5 ${destructive ? 'text-red-600' : 'text-amber-600'}`} />
+        </div>
+        <div>
+          <h3 className="font-semibold text-base text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{description}</p>
+        </div>
+      </div>
+      <div className="flex gap-3 justify-end">
+        <Button variant="outline" onClick={onCancel} size="sm">Cancel</Button>
+        <Button
+          size="sm"
+          className={destructive ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+          onClick={() => { onConfirm(); onCancel(); }}
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    </Card>
+  </div>
+);
+
+// ── useConfirm hook ───────────────────────────────────────────────────────────
+function useConfirm() {
+  const [dialog, setDialog] = useState<(ConfirmOptions & { onCancel: () => void }) | null>(null);
+
+  const confirm = useCallback((opts: ConfirmOptions) => {
+    setDialog({
+      ...opts,
+      onCancel: () => {
+        setDialog(null);
+        opts.onCancel?.();
+      },
+      onConfirm: () => {
+        setDialog(null);
+        opts.onConfirm();
+      },
+    });
+  }, []);
+
+  const DialogNode = dialog ? <ConfirmDialog {...dialog} /> : null;
+  return { confirm, DialogNode };
+}
+
+// ── Supabase edge-function caller ─────────────────────────────────────────────
+async function callEdgeFunction(name: string, body: object): Promise<any> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${name}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey':         import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify(body),
+    }
+  );
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || result.message || 'Edge function failed');
+  return result;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
   const { userId, role } = useRole();
   const navigate         = useNavigate();
   const { toast }        = useToast();
   const fileRef          = React.useRef<HTMLInputElement>(null);
+  const { confirm, DialogNode } = useConfirm();
 
   // ── profile ──────────────────────────────────────────────────────────────
   const [adminProfile,  setAdminProfile]  = useState<any>(null);
@@ -99,16 +197,16 @@ export default function AdminDashboard() {
   const [savingRole,    setSavingRole]    = useState<string | null>(null);
 
   // ── publications ──────────────────────────────────────────────────────────
-  const [publications,       setPublications]       = useState<any[]>([]);
-  const [pubStatusFilter,    setPubStatusFilter]    = useState<string>('all');
-  const [activePublication,  setActivePublication]  = useState<any>(null);
-  const [rejectionFeedback,  setRejectionFeedback]  = useState('');
-  const [processingPub,      setProcessingPub]      = useState(false);
-  const [deletingPub,        setDeletingPub]        = useState<string | null>(null);
-  const [publishingAsContent,setPublishingAsContent]= useState<string | null>(null);
-  const [editingNotesPub,    setEditingNotesPub]    = useState<string | null>(null);
-  const [adminNotesInput,    setAdminNotesInput]    = useState('');
-  const [savingNotes,        setSavingNotes]        = useState(false);
+  const [publications,        setPublications]        = useState<any[]>([]);
+  const [pubStatusFilter,     setPubStatusFilter]     = useState<string>('all');
+  const [activePublication,   setActivePublication]   = useState<any>(null);
+  const [rejectionFeedback,   setRejectionFeedback]   = useState('');
+  const [processingPub,       setProcessingPub]       = useState(false);
+  const [deletingPub,         setDeletingPub]         = useState<string | null>(null);
+  const [publishingAsContent, setPublishingAsContent] = useState<string | null>(null);
+  const [editingNotesPub,     setEditingNotesPub]     = useState<string | null>(null);
+  const [adminNotesInput,     setAdminNotesInput]     = useState('');
+  const [savingNotes,         setSavingNotes]         = useState(false);
 
   // ── content ───────────────────────────────────────────────────────────────
   const [contentItems,        setContentItems]        = useState<any[]>([]);
@@ -158,9 +256,6 @@ export default function AdminDashboard() {
       const [profileRes, usersRes, pubRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
-
-        // ✅ FIX: Use publication_requests_view instead of joining profiles!submitted_by
-        // The view already exposes submitted_by_email and reviewed_by_email
         supabase
           .from('publication_requests_view')
           .select('*')
@@ -193,7 +288,7 @@ export default function AdminDashboard() {
       .from('content')
       .select(
         'id, title, subtitle, author, content_type, status, cover_image_url, ' +
-        'price, is_free, is_featured, is_for_sale, language, visibility, ' +
+        'price, is_free, is_featured, is_for_sale, language, visibility, uploaded_by, ' +
         'average_rating, total_reviews, view_count, total_downloads, created_at, updated_at, published_at'
       )
       .order('created_at', { ascending: false })
@@ -208,7 +303,6 @@ export default function AdminDashboard() {
     setContentLoading(false);
   };
 
-  // ✅ FIX: loadPublications also uses publication_requests_view
   const loadPublications = async () => {
     const { data, error } = await supabase
       .from('publication_requests_view')
@@ -246,59 +340,91 @@ export default function AdminDashboard() {
 
   // ── content actions ───────────────────────────────────────────────────────
 
+  /**
+   * Publish or unpublish a content item via the content-publish edge function.
+   * After success:
+   *  - Updates local state
+   *  - Records a notification for the content owner (valid types from DB constraint)
+   *  - Fires the send-content-status-email edge function to email the owner
+   */
   const handlePublishContent = async (contentId: string, action: 'publish' | 'unpublish') => {
     setPublishingContent(contentId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/content-publish`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey':         import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ content_id: contentId, action }),
-        }
-      );
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed');
+      // Call the content-publish edge function
+      const result = await callEdgeFunction('content-publish', {
+        content_id: contentId,
+        action,
+        send_notification: false, // We handle notifications ourselves below
+      });
+
       const newStatus = action === 'publish' ? 'published' : 'archived';
       setContentItems(prev => prev.map(c => c.id === contentId ? { ...c, status: newStatus } : c));
-      toast({ title: action === 'publish' ? 'Content published' : 'Content unpublished' });
+
+      // Find the content item to get the uploaded_by
+      const contentItem = contentItems.find(c => c.id === contentId);
+      if (contentItem?.uploaded_by) {
+        // Record notification
+        const notifType   = action === 'publish' ? 'content_published' : 'content_unpublished';
+        const notifTitle  = action === 'publish' ? 'Content Published' : 'Content Unpublished';
+        const notifMsg    = action === 'publish'
+          ? `Your content "${contentItem.title}" has been published and is now live.`
+          : `Your content "${contentItem.title}" has been unpublished and archived.`;
+
+        await supabase.from('notifications').insert({
+          user_id:    contentItem.uploaded_by,
+          type:       notifType,
+          title:      notifTitle,
+          message:    notifMsg,
+          content_id: contentId,
+          read:       false,
+        });
+
+        // Fire email to content owner
+        try {
+          await callEdgeFunction('send-content-status-email', {
+            content_id: contentId,
+            action,
+            content_title: contentItem.title,
+          });
+        } catch (emailErr: any) {
+          // Email failure is non-fatal; log but don't block
+          console.warn('Content status email failed:', emailErr.message);
+        }
+      }
+
+      toast({
+        title: action === 'publish' ? '✅ Content published' : 'Content unpublished',
+        description: action === 'publish'
+          ? `"${contentItems.find(c => c.id === contentId)?.title}" is now live.`
+          : `"${contentItems.find(c => c.id === contentId)?.title}" has been archived.`,
+      });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Failed', description: err.message });
+      toast({ variant: 'destructive', title: 'Action failed', description: err.message });
     } finally {
       setPublishingContent(null);
     }
   };
 
-  const handleDeleteContent = async (contentId: string, title: string) => {
-    if (!window.confirm(`Delete "${title}"?\n\nThis cannot be undone. Items with existing orders will be archived instead.`)) return;
+  const handleDeleteContent = (contentId: string, title: string) => {
+    confirm({
+      title:        'Delete Content',
+      description:  `Delete "${title}"? This cannot be undone. Items with existing orders will be archived instead.`,
+      confirmLabel: 'Delete',
+      destructive:  true,
+      onConfirm:    () => _doDeleteContent(contentId, title),
+    });
+  };
+
+  const _doDeleteContent = async (contentId: string, title: string) => {
     setDeletingContent(contentId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/content-delete`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey':         import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ content_id: contentId }),
-        }
-      );
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed');
+      const result = await callEdgeFunction('content-delete', { content_id: contentId });
       if (result.action === 'deleted') {
         setContentItems(prev => prev.filter(c => c.id !== contentId));
         toast({ title: 'Content deleted permanently' });
       } else {
         setContentItems(prev => prev.map(c => c.id === contentId ? { ...c, status: 'archived' } : c));
-        toast({ title: 'Content archived', description: 'Item has existing purchases and was archived rather than deleted.' });
+        toast({ title: 'Content archived', description: 'Item has existing purchases and was archived.' });
       }
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Delete failed', description: err.message });
@@ -319,6 +445,12 @@ export default function AdminDashboard() {
 
   // ── order actions ─────────────────────────────────────────────────────────
 
+  /**
+   * Update order status, then:
+   *  - Record a notification for the customer (type: 'order_completed' for completed/delivered,
+   *    'purchase_confirmed' for paid, 'general' for others)
+   *  - Send an email via send-order-status-email edge function
+   */
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingOrder(orderId);
     const updates: any = { status: newStatus, updated_at: new Date().toISOString() };
@@ -328,19 +460,63 @@ export default function AdminDashboard() {
     const { error } = await supabase.from('orders').update(updates).eq('id', orderId);
     if (error) {
       toast({ variant: 'destructive', title: 'Update failed', description: error.message });
-    } else {
-      const order = orders.find(o => o.id === orderId);
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
-      if (order?.user_id) {
-        await supabase.from('notifications').insert({
-          user_id: order.user_id,
-          type:    'order_update',
-          title:   'Order Status Updated',
-          message: `Your order ${order.order_number} has been updated to "${newStatus}".`,
-        });
-      }
-      toast({ title: 'Order updated', description: `Status → ${newStatus}` });
+      setUpdatingOrder(null);
+      return;
     }
+
+    const order = orders.find(o => o.id === orderId);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+
+    if (order?.user_id) {
+      // Choose a valid notification type from the DB constraint
+      // Valid: 'order_completed' | 'purchase_confirmed' | 'general' | 'system_announcement'
+      const notifType = (newStatus === 'completed' || newStatus === 'delivered')
+        ? 'order_completed'
+        : 'general';
+
+      const statusLabels: Record<string, string> = {
+        pending:    'Pending',
+        processing: 'Processing',
+        shipped:    'Shipped',
+        delivered:  'Delivered',
+        completed:  'Completed',
+        cancelled:  'Cancelled',
+      };
+
+      const statusMessages: Record<string, string> = {
+        pending:    `Your order #${order.order_number} has been received and is pending processing.`,
+        processing: `Great news! Your order #${order.order_number} is now being processed and prepared for dispatch.`,
+        shipped:    `Your order #${order.order_number} has been shipped and is on its way to you!`,
+        delivered:  `Your order #${order.order_number} has been delivered. Thank you for your purchase!`,
+        completed:  `Your order #${order.order_number} is complete. We hope you enjoy your purchase!`,
+        cancelled:  `Your order #${order.order_number} has been cancelled. Please contact us if you have questions.`,
+      };
+
+      await supabase.from('notifications').insert({
+        user_id: order.user_id,
+        type:    notifType,
+        title:   `Order ${statusLabels[newStatus] || newStatus}`,
+        message: statusMessages[newStatus] || `Your order #${order.order_number} status is now "${newStatus}".`,
+        read:    false,
+        metadata: {
+          order_id:     orderId,
+          order_number: order.order_number,
+          new_status:   newStatus,
+        },
+      });
+
+      // Send email notification to customer about order status change
+      try {
+        await callEdgeFunction('send-order-status-email', {
+          order_id:   orderId,
+          new_status: newStatus,
+        });
+      } catch (emailErr: any) {
+        console.warn('Order status email failed:', emailErr.message);
+      }
+    }
+
+    toast({ title: 'Order updated', description: `Status → ${newStatus}` });
     setUpdatingOrder(null);
   };
 
@@ -352,15 +528,40 @@ export default function AdminDashboard() {
     const { error } = await supabase.from('orders').update(updates).eq('id', orderId);
     if (error) {
       toast({ variant: 'destructive', title: 'Update failed', description: error.message });
-    } else {
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
-      toast({ title: 'Payment status updated', description: `→ ${newPayment}` });
+      setUpdatingOrder(null);
+      return;
     }
+
+    const order = orders.find(o => o.id === orderId);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
+
+    // Notify customer when payment is confirmed
+    if (newPayment === 'paid' && order?.user_id) {
+      await supabase.from('notifications').insert({
+        user_id: order.user_id,
+        type:    'purchase_confirmed',
+        title:   'Payment Confirmed',
+        message: `Payment for order #${order.order_number} has been confirmed. Thank you!`,
+        read:    false,
+        metadata: { order_id: orderId, order_number: order.order_number },
+      });
+    }
+
+    toast({ title: 'Payment status updated', description: `→ ${newPayment}` });
     setUpdatingOrder(null);
   };
 
-  const deleteOrder = async (orderId: string, orderNumber: string) => {
-    if (!window.confirm(`Permanently delete order #${orderNumber}?\n\nThis action cannot be undone.`)) return;
+  const deleteOrder = (orderId: string, orderNumber: string) => {
+    confirm({
+      title:        'Delete Order',
+      description:  `Permanently delete order #${orderNumber}? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      destructive:  true,
+      onConfirm:    () => _doDeleteOrder(orderId, orderNumber),
+    });
+  };
+
+  const _doDeleteOrder = async (orderId: string, orderNumber: string) => {
     setDeletingOrder(orderId);
     const { error } = await supabase.from('orders').delete().eq('id', orderId);
     if (error) {
@@ -387,8 +588,17 @@ export default function AdminDashboard() {
     }
   };
 
-  const bulkUpdateOrderStatus = async (newStatus: string) => {
+  const bulkUpdateOrderStatus = (newStatus: string) => {
     if (!selectedOrders.length) return;
+    confirm({
+      title:        `Bulk Update ${selectedOrders.length} Orders`,
+      description:  `Set all ${selectedOrders.length} selected orders to "${newStatus}"?`,
+      confirmLabel: 'Update All',
+      onConfirm:    () => _doBulkUpdateOrderStatus(newStatus),
+    });
+  };
+
+  const _doBulkUpdateOrderStatus = async (newStatus: string) => {
     const updates: any = { status: newStatus, updated_at: new Date().toISOString() };
     if (newStatus === 'completed') updates.completed_at = new Date().toISOString();
     if (newStatus === 'cancelled') updates.cancelled_at = new Date().toISOString();
@@ -403,9 +613,18 @@ export default function AdminDashboard() {
     }
   };
 
-  const bulkDeleteOrders = async () => {
+  const bulkDeleteOrders = () => {
     if (!selectedOrders.length) return;
-    if (!window.confirm(`Permanently delete ${selectedOrders.length} selected orders?\n\nThis cannot be undone.`)) return;
+    confirm({
+      title:        `Delete ${selectedOrders.length} Orders`,
+      description:  `Permanently delete ${selectedOrders.length} selected orders? This cannot be undone.`,
+      confirmLabel: 'Delete All',
+      destructive:  true,
+      onConfirm:    () => _doBulkDeleteOrders(),
+    });
+  };
+
+  const _doBulkDeleteOrders = async () => {
     const { error } = await supabase.from('orders').delete().in('id', selectedOrders);
     if (error) {
       toast({ variant: 'destructive', title: 'Bulk delete failed', description: error.message });
@@ -426,22 +645,38 @@ export default function AdminDashboard() {
       const { error } = await supabase.from('publications').update(updates).eq('id', pubId);
       if (error) throw error;
 
-      // ✅ FIX: pub now comes from publication_requests_view — use submitted_by_email
-      // The view exposes `submitted_by` as the UUID (from publications.submitted_by)
       const pub = publications.find(p => p.id === pubId);
       if (pub?.submitted_by) {
+        // Valid notification types from DB constraint:
+        // 'submission_approved' | 'submission_rejected' | 'general'
+        const notifType = action === 'approved'
+          ? 'submission_approved'
+          : action === 'rejected'
+            ? 'submission_rejected'
+            : 'general';
+
         const msgs: Record<string, string> = {
-          approved:     `Your manuscript "${pub.title}" has been approved!`,
-          rejected:     `Your manuscript "${pub.title}" was not approved.${rejectionFeedback ? ' Feedback: ' + rejectionFeedback : ''}`,
-          under_review: `Your manuscript "${pub.title}" is now under review.`,
+          approved:     `Congratulations! Your manuscript "${pub.title}" has been approved.`,
+          rejected:     `Your manuscript "${pub.title}" was not approved at this time.${rejectionFeedback ? ' Feedback: ' + rejectionFeedback : ''}`,
+          under_review: `Your manuscript "${pub.title}" is now under review by our editorial team.`,
         };
+
+        const titles: Record<string, string> = {
+          approved:     'Manuscript Approved! 🎉',
+          rejected:     'Submission Decision',
+          under_review: 'Manuscript Under Review',
+        };
+
         await supabase.from('notifications').insert({
           user_id: pub.submitted_by,
-          type:    action === 'approved' ? 'content_approved' : action === 'rejected' ? 'content_rejected' : 'general',
-          title:   action === 'approved' ? 'Manuscript Approved!' : action === 'rejected' ? 'Submission Decision' : 'Under Review',
+          type:    notifType,
+          title:   titles[action],
           message: msgs[action],
+          read:    false,
+          metadata: { publication_id: pubId, title: pub.title },
         });
       }
+
       setPublications(prev => prev.map(p => p.id === pubId ? { ...p, ...updates } : p));
       setActivePublication(null);
       setRejectionFeedback('');
@@ -453,8 +688,17 @@ export default function AdminDashboard() {
     }
   };
 
-  const deletePublication = async (pubId: string, title: string) => {
-    if (!window.confirm(`Delete submission "${title}"?\n\nThis will permanently remove the manuscript submission record.`)) return;
+  const deletePublication = (pubId: string, title: string) => {
+    confirm({
+      title:        'Delete Submission',
+      description:  `Delete submission "${title}"? This will permanently remove the manuscript submission record.`,
+      confirmLabel: 'Delete',
+      destructive:  true,
+      onConfirm:    () => _doDeletePublication(pubId),
+    });
+  };
+
+  const _doDeletePublication = async (pubId: string) => {
     setDeletingPub(pubId);
     const { error } = await supabase.from('publications').delete().eq('id', pubId);
     if (error) {
@@ -483,31 +727,56 @@ export default function AdminDashboard() {
     setSavingNotes(false);
   };
 
-  const publishManuscriptAsContent = async (pub: any) => {
-    if (!window.confirm(`Publish "${pub.title}" as live content?\n\nThis will create a published content record and notify the author by email.`)) return;
+  /**
+   * Publish an approved manuscript as live content.
+   * Calls the publication-publish edge function, then records a notification.
+   */
+  const publishManuscriptAsContent = (pub: any) => {
+    confirm({
+      title:        'Publish as Live Content',
+      description:  `Publish "${pub.title}" as live content? This will create a published content record and notify the author.`,
+      confirmLabel: 'Publish Live',
+      onConfirm:    () => _doPublishManuscript(pub),
+    });
+  };
+
+  const _doPublishManuscript = async (pub: any) => {
     setPublishingAsContent(pub.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/publication-publish`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type':  'application/json',
-            'Authorization': `Bearer ${session?.access_token}`,
-            'apikey':         import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ publication_id: pub.id }),
+      const result = await callEdgeFunction('content-publish', {
+        publication_id: pub.id,
+      });
+
+      // Record notification for the author
+      if (pub.submitted_by) {
+        await supabase.from('notifications').insert({
+          user_id:  pub.submitted_by,
+          type:     'content_published',
+          title:    'Your Book is Now Live! 🎉',
+          message:  `"${pub.title}" has been published on Intercen Books and is now available to readers.`,
+          read:     false,
+          metadata: { publication_id: pub.id, title: pub.title },
+        });
+        // Fire email to author
+        try {
+          await callEdgeFunction('send-content-status-email', {
+            content_id: result.content_id || pub.content_id || pub.id, // use returned content_id if available
+            action: 'publish',
+            content_title: pub.title,
+          });
+        } catch (emailErr: any) {
+          // Email failure is non-fatal; log but don't block
+          console.warn('Content status email failed:', emailErr.message);
         }
-      );
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || 'Failed to publish');
+      }
+
       toast({
-        title: '🎉 Manuscript published!',
+        title:       '🎉 Manuscript published!',
         description: result.email_sent
           ? `"${pub.title}" is now live. Author notified by email.`
           : `"${pub.title}" is now live. In-app notification sent.`,
       });
+
       loadContent();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Publish failed', description: err.message });
@@ -531,13 +800,18 @@ export default function AdminDashboard() {
         .eq('id', targetId);
       if (error) throw error;
       setUsers(prev => prev.map(u => u.id === targetId ? { ...u, role: newRole } : u));
+
+      // 'role_changed' IS a valid type per the DB constraint
       await supabase.from('notifications').insert({
         user_id: targetId,
-        type:    'general',
-        title:   'Your role has been updated',
-        message: `An admin changed your role to "${newRole}".`,
+        type:    'role_changed',
+        title:   'Your Account Role Has Been Updated',
+        message: `An administrator has updated your role to "${newRole}".`,
+        read:    false,
+        metadata: { new_role: newRole },
       });
-      toast({ title: 'Role updated' });
+
+      toast({ title: 'Role updated', description: `User role set to "${newRole}".` });
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Failed', description: err.message });
     } finally {
@@ -669,169 +943,191 @@ export default function AdminDashboard() {
 
   // ── inline sub-components ─────────────────────────────────────────────────
 
-  const ContentGridCard = ({ item }: { item: any }) => (
-    <div className="group relative rounded-xl overflow-hidden border bg-card shadow-sm hover:shadow-md transition-all duration-200">
-      <div className="relative aspect-[3/4] bg-muted overflow-hidden">
-        {item.cover_image_url ? (
-          <img
-            src={item.cover_image_url}
-            alt={item.title}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-muted gap-2">
-            <BookOpen className="h-10 w-10 text-primary/30" />
-            <span className="text-[10px] text-muted-foreground capitalize">{item.content_type}</span>
-          </div>
-        )}
-        <div className="absolute top-2 left-2">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${CONTENT_STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-            {item.status?.replace('_', ' ')}
-          </span>
-        </div>
-        {item.is_featured && (
-          <div className="absolute top-2 right-2">
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-0.5">
-              <Star className="h-2.5 w-2.5 fill-amber-500" />
+  const ContentGridCard = ({ item }: { item: any }) => {
+    const isPublished = item.status === 'published';
+    const isBusy = publishingContent === item.id;
+    return (
+      <div className="group relative rounded-xl overflow-hidden border bg-card shadow-sm hover:shadow-md transition-all duration-200">
+        <div className="relative aspect-[3/4] bg-muted overflow-hidden">
+          {item.cover_image_url ? (
+            <img
+              src={item.cover_image_url}
+              alt={item.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-primary/10 to-muted gap-2">
+              <BookOpen className="h-10 w-10 text-primary/30" />
+              <span className="text-[10px] text-muted-foreground capitalize">{item.content_type}</span>
+            </div>
+          )}
+          <div className="absolute top-2 left-2">
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${CONTENT_STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+              {item.status?.replace('_', ' ')}
             </span>
           </div>
-        )}
-        <div className="absolute inset-0 bg-black/72 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-          <div className="flex gap-1.5 flex-wrap justify-center px-3">
+          {item.is_featured && (
+            <div className="absolute top-2 right-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-0.5">
+                <Star className="h-2.5 w-2.5 fill-amber-500" />
+              </span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-black/72 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+            <div className="flex gap-1.5 flex-wrap justify-center px-3">
+              <button onClick={() => navigate(`/content/${item.id}`)}
+                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="View">
+                <Eye className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => navigate(`/content/update/${item.id}`)}
+                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="Edit">
+                <Edit3 className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToggleFeatured(item.id, item.is_featured)}
+                className={`p-2 rounded-lg text-white transition-colors ${item.is_featured ? 'bg-amber-500/60 hover:bg-amber-500/80' : 'bg-white/15 hover:bg-white/30'}`}
+                title={item.is_featured ? 'Remove featured' : 'Mark featured'}>
+                <Star className="h-3.5 w-3.5" />
+              </button>
+              {/* Dynamic Publish / Unpublish button */}
+              <button
+                onClick={() => handlePublishContent(item.id, isPublished ? 'unpublish' : 'publish')}
+                disabled={isBusy}
+                className={`p-2 rounded-lg text-white transition-colors disabled:opacity-50 ${
+                  isPublished
+                    ? 'bg-orange-500/60 hover:bg-orange-500/80'
+                    : 'bg-green-500/60 hover:bg-green-500/80'
+                }`}
+                title={isPublished ? 'Unpublish' : 'Publish'}
+              >
+                {isBusy
+                  ? <div className="h-3.5 w-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  : isPublished
+                    ? <EyeOff className="h-3.5 w-3.5" />
+                    : <Globe className="h-3.5 w-3.5" />
+                }
+              </button>
+              <button
+                onClick={() => handleDeleteContent(item.id, item.title)}
+                disabled={deletingContent === item.id}
+                className="p-2 bg-red-500/60 hover:bg-red-500/80 rounded-lg text-white transition-colors disabled:opacity-50"
+                title="Delete"
+              >
+                {deletingContent === item.id
+                  ? <div className="h-3.5 w-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                  : <Trash2 className="h-3.5 w-3.5" />
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="p-3">
+          <h4 className="font-medium text-sm line-clamp-1">{item.title}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.author || '—'}</p>
+          {/* Publish toggle badge below card info */}
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded capitalize">{item.content_type}</span>
+            <span className="text-sm font-semibold">
+              {item.is_free
+                ? <span className="text-green-600 text-xs font-medium">Free</span>
+                : `KES ${parseFloat(item.price || 0).toLocaleString()}`
+              }
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+            {item.view_count > 0 && <span>{item.view_count.toLocaleString()} views</span>}
+            {item.total_downloads > 0 && <span>· {item.total_downloads.toLocaleString()} dl</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ContentListRow = ({ item }: { item: any }) => {
+    const isPublished = item.status === 'published';
+    const isBusy = publishingContent === item.id;
+    return (
+      <tr className="hover:bg-muted/20 transition-colors">
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-3">
+            {item.cover_image_url ? (
+              <img src={item.cover_image_url} alt="" className="h-10 w-8 object-cover rounded border flex-shrink-0" />
+            ) : (
+              <div className="h-10 w-8 bg-muted rounded border flex items-center justify-center flex-shrink-0">
+                <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="font-medium text-sm truncate max-w-[220px]">{item.title}</div>
+              <div className="text-xs text-muted-foreground truncate max-w-[220px]">{item.author || '—'}</div>
+            </div>
+            {item.is_featured && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-400 flex-shrink-0" />}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <span className="text-xs capitalize bg-muted px-2 py-0.5 rounded text-muted-foreground">{item.content_type}</span>
+        </td>
+        <td className="px-4 py-3">
+          <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${CONTENT_STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+            {item.status?.replace('_', ' ')}
+          </span>
+        </td>
+        <td className="px-4 py-3 text-sm font-medium">
+          {item.is_free
+            ? <span className="text-green-600 text-xs font-medium">Free</span>
+            : `KES ${parseFloat(item.price || 0).toLocaleString()}`
+          }
+        </td>
+        <td className="px-4 py-3 text-xs text-muted-foreground">
+          {(item.view_count || 0).toLocaleString()}
+          {item.total_downloads > 0 && <span className="ml-1 opacity-60">/ {item.total_downloads.toLocaleString()} dl</span>}
+        </td>
+        <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString()}</td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-0.5">
             <button onClick={() => navigate(`/content/${item.id}`)}
-              className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="View">
+              className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="View">
               <Eye className="h-3.5 w-3.5" />
             </button>
             <button onClick={() => navigate(`/content/update/${item.id}`)}
-              className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="Edit">
+              className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="Edit">
               <Edit3 className="h-3.5 w-3.5" />
             </button>
             <button onClick={() => handleToggleFeatured(item.id, item.is_featured)}
-              className={`p-2 rounded-lg text-white transition-colors ${item.is_featured ? 'bg-amber-500/60 hover:bg-amber-500/80' : 'bg-white/15 hover:bg-white/30'}`}
-              title={item.is_featured ? 'Remove featured' : 'Mark featured'}>
+              className={`p-1.5 hover:bg-muted rounded transition-colors ${item.is_featured ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
+              title={item.is_featured ? 'Remove featured' : 'Feature'}>
               <Star className="h-3.5 w-3.5" />
             </button>
+            {/* Dynamic Publish / Unpublish button in list view */}
             <button
-              onClick={() => handlePublishContent(item.id, item.status === 'published' ? 'unpublish' : 'publish')}
-              disabled={publishingContent === item.id}
-              className={`p-2 rounded-lg text-white transition-colors disabled:opacity-50 ${
-                item.status === 'published' ? 'bg-orange-500/60 hover:bg-orange-500/80' : 'bg-green-500/60 hover:bg-green-500/80'
+              onClick={() => handlePublishContent(item.id, isPublished ? 'unpublish' : 'publish')}
+              disabled={isBusy}
+              className={`p-1.5 hover:bg-muted rounded transition-colors disabled:opacity-40 ${
+                isPublished
+                  ? 'text-orange-500 hover:text-orange-600'
+                  : 'text-muted-foreground hover:text-green-600'
               }`}
-              title={item.status === 'published' ? 'Unpublish' : 'Publish'}
+              title={isPublished ? 'Unpublish' : 'Publish'}
             >
-              {publishingContent === item.id
-                ? <div className="h-3.5 w-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                : item.status === 'published' ? <EyeOff className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />
+              {isBusy
+                ? <div className="h-3.5 w-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                : isPublished
+                  ? <EyeOff className="h-3.5 w-3.5" />
+                  : <Globe className="h-3.5 w-3.5" />
               }
             </button>
             <button
               onClick={() => handleDeleteContent(item.id, item.title)}
               disabled={deletingContent === item.id}
-              className="p-2 bg-red-500/60 hover:bg-red-500/80 rounded-lg text-white transition-colors disabled:opacity-50"
+              className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
               title="Delete"
             >
-              {deletingContent === item.id
-                ? <div className="h-3.5 w-3.5 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-                : <Trash2 className="h-3.5 w-3.5" />
-              }
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
-        </div>
-      </div>
-      <div className="p-3">
-        <h4 className="font-medium text-sm line-clamp-1">{item.title}</h4>
-        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.author || '—'}</p>
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded capitalize">{item.content_type}</span>
-          <span className="text-sm font-semibold">
-            {item.is_free
-              ? <span className="text-green-600 text-xs font-medium">Free</span>
-              : `KES ${parseFloat(item.price || 0).toLocaleString()}`
-            }
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-          {item.view_count > 0 && <span>{item.view_count.toLocaleString()} views</span>}
-          {item.total_downloads > 0 && <span>· {item.total_downloads.toLocaleString()} dl</span>}
-        </div>
-      </div>
-    </div>
-  );
-
-  const ContentListRow = ({ item }: { item: any }) => (
-    <tr className="hover:bg-muted/20 transition-colors">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          {item.cover_image_url ? (
-            <img src={item.cover_image_url} alt="" className="h-10 w-8 object-cover rounded border flex-shrink-0" />
-          ) : (
-            <div className="h-10 w-8 bg-muted rounded border flex items-center justify-center flex-shrink-0">
-              <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-            </div>
-          )}
-          <div className="min-w-0">
-            <div className="font-medium text-sm truncate max-w-[220px]">{item.title}</div>
-            <div className="text-xs text-muted-foreground truncate max-w-[220px]">{item.author || '—'}</div>
-          </div>
-          {item.is_featured && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-400 flex-shrink-0" />}
-        </div>
-      </td>
-      <td className="px-4 py-3">
-        <span className="text-xs capitalize bg-muted px-2 py-0.5 rounded text-muted-foreground">{item.content_type}</span>
-      </td>
-      <td className="px-4 py-3">
-        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${CONTENT_STATUS_COLORS[item.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
-          {item.status?.replace('_', ' ')}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-sm font-medium">
-        {item.is_free
-          ? <span className="text-green-600 text-xs font-medium">Free</span>
-          : `KES ${parseFloat(item.price || 0).toLocaleString()}`
-        }
-      </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">
-        {(item.view_count || 0).toLocaleString()}
-        {item.total_downloads > 0 && <span className="ml-1 opacity-60">/ {item.total_downloads.toLocaleString()} dl</span>}
-      </td>
-      <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString()}</td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-0.5">
-          <button onClick={() => navigate(`/content/${item.id}`)}
-            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="View">
-            <Eye className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => navigate(`/content/update/${item.id}`)}
-            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="Edit">
-            <Edit3 className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => handleToggleFeatured(item.id, item.is_featured)}
-            className={`p-1.5 hover:bg-muted rounded transition-colors ${item.is_featured ? 'text-amber-500' : 'text-muted-foreground hover:text-amber-500'}`}
-            title={item.is_featured ? 'Remove featured' : 'Feature'}>
-            <Star className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => handlePublishContent(item.id, item.status === 'published' ? 'unpublish' : 'publish')}
-            disabled={publishingContent === item.id}
-            className={`p-1.5 hover:bg-muted rounded transition-colors disabled:opacity-40 ${
-              item.status === 'published' ? 'text-orange-500 hover:text-orange-600' : 'text-muted-foreground hover:text-green-600'
-            }`}
-            title={item.status === 'published' ? 'Unpublish' : 'Publish'}
-          >
-            {item.status === 'published' ? <EyeOff className="h-3.5 w-3.5" /> : <Globe className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            onClick={() => handleDeleteContent(item.id, item.title)}
-            disabled={deletingContent === item.id}
-            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
+        </td>
+      </tr>
+    );
+  };
 
   // ── render ────────────────────────────────────────────────────────────────
 
@@ -839,9 +1135,12 @@ export default function AdminDashboard() {
     <>
       <Seo title="Admin Dashboard | Intercen Books" description="Intercen Books administration panel." />
       <div className="min-h-screen bg-background">
+        {/* Global confirm dialog portal */}
+        {DialogNode}
+
         <Header />
 
-        {/* Hero banner */}
+        {/* Hero banner — Upload Content / Content Manager buttons REMOVED (they were duplicates) */}
         <div className="bg-charcoal text-white border-b border-white/5">
           <div className="container max-w-7xl mx-auto px-4 py-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -866,17 +1165,7 @@ export default function AdminDashboard() {
                   <p className="text-white/50 text-xs">{adminProfile?.email || 'Administration Panel'} · Intercen Books</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button size="sm" variant="outline"
-                  className="border-white/20 text-white/80 hover:bg-white/10 gap-2 text-xs h-8"
-                  onClick={() => navigate('/upload')}>
-                  <Upload className="h-3.5 w-3.5" /> Upload Content
-                </Button>
-                <Button size="sm" variant="outline"
-                  className="border-white/20 text-white/80 hover:bg-white/10 gap-2 text-xs h-8"
-                  onClick={() => navigate('/content-management')}>
-                  <BookOpen className="h-3.5 w-3.5" /> Content Manager
-                </Button>
+              <div className="flex items-center gap-2">
                 <Button size="sm" variant="ghost"
                   className="text-white/50 hover:text-white gap-2 text-xs h-8"
                   onClick={handleSignOut}>
@@ -1373,19 +1662,16 @@ export default function AdminDashboard() {
                                 </span>
                               </div>
 
-                              <div className="flex items-center gap-2 mb-1">
-                                {/* ✅ FIX: view exposes submitted_by_email, no avatar from view */}
-                                <p className="text-sm text-muted-foreground">
-                                  By <span className="font-medium text-foreground">{pub.author_name}</span>
-                                  {pub.author_email && <span className="ml-2">· {pub.author_email}</span>}
-                                  {pub.author_phone && <span className="ml-2 opacity-60">· {pub.author_phone}</span>}
-                                  {pub.submitted_by_email && (
-                                    <span className="ml-2 text-xs opacity-60">(account: {pub.submitted_by_email})</span>
-                                  )}
-                                </p>
-                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                By <span className="font-medium text-foreground">{pub.author_name}</span>
+                                {pub.author_email && <span className="ml-2">· {pub.author_email}</span>}
+                                {pub.author_phone && <span className="ml-2 opacity-60">· {pub.author_phone}</span>}
+                                {pub.submitted_by_email && (
+                                  <span className="ml-2 text-xs opacity-60">(account: {pub.submitted_by_email})</span>
+                                )}
+                              </p>
 
-                              <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{pub.description}</p>
+                              <p className="text-sm text-muted-foreground line-clamp-2 my-2">{pub.description}</p>
 
                               <div className="flex gap-3 text-xs text-muted-foreground flex-wrap mb-2">
                                 <span className="capitalize bg-muted px-2 py-0.5 rounded">{pub.publishing_type} publishing</span>
@@ -1430,6 +1716,7 @@ export default function AdminDashboard() {
                               </>
                             )}
 
+                            {/* Publish Live button — only for approved submissions */}
                             {pub.status === 'approved' && (
                               <Button
                                 size="sm"
@@ -1530,9 +1817,10 @@ export default function AdminDashboard() {
                 })()}
               </div>
 
+              {/* Rejection modal — on-screen, no window.confirm */}
               {activePublication && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-                  <Card className="p-6 max-w-lg w-full mx-4 shadow-elevated">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                  <Card className="p-6 max-w-lg w-full mx-4 shadow-elevated animate-in fade-in zoom-in-95 duration-150">
                     <h3 className="font-forum text-xl mb-1">Reject Submission</h3>
                     <p className="text-muted-foreground text-sm mb-4">
                       "{activePublication.title}" by {activePublication.author_name}

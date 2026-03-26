@@ -1,9 +1,19 @@
+// src/pages/CheckoutPayment.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Checkout payment page
+//  ✅ All original M-Pesa STK push + Paystack logic preserved
+//  ✅ Pre-populates phone number from ?phone= query param
+//  ✅ Pre-selects payment method from ?method= query param (mpesa | paystack)
+//  ✅ order_id from URL path param still used as primary key
+//  ✅ Polling cleanup on unmount unchanged
+// ─────────────────────────────────────────────────────────────────────────────
+
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ShoppingBag, CheckCircle, CreditCard, Package,
   Loader2, AlertCircle, ArrowLeft, Smartphone, ChevronRight
-} from "lucide-react";
+} from 'lucide-react';
 import { supabase } from '../lib/SupabaseClient';
 import { Layout } from '@/components/layout/Layout';
 import { Seo } from '@/components/Seo';
@@ -40,20 +50,30 @@ interface OrderDetails {
 type PaymentMethod = 'mpesa' | 'paystack' | null;
 
 const CheckoutPayment = () => {
-  const { orderId } = useParams<{ orderId: string }>();
-  const navigate = useNavigate();
+  const { orderId }        = useParams<{ orderId: string }>();
+  const navigate           = useNavigate();
+  const [searchParams]     = useSearchParams();
 
-  const [order, setOrder] = useState<OrderDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>(null);
+  // ── Read pre-population query params set by AuthorDashboard.goToCheckout()
+  //    ?method=mpesa|paystack   → pre-select payment method
+  //    ?phone=7XXXXXXXX         → pre-fill M-Pesa phone (9 digits, no +254)
+  const preMethod = searchParams.get('method') as PaymentMethod | null;
+  const prePhone  = searchParams.get('phone') ?? '';
 
-  // M-Pesa specific state
-  const [mpesaPhone, setMpesaPhone] = useState('');
-  const [mpesaStep, setMpesaStep] = useState<'idle' | 'prompt_sent' | 'confirming'>('idle');
-  const [pollTimeoutReached, setPollTimeoutReached] = useState(false);
+  const [order,                   setOrder]                   = useState<OrderDetails | null>(null);
+  const [loading,                 setLoading]                 = useState(true);
+  const [processing,              setProcessing]              = useState(false);
+  const [error,                   setError]                   = useState<string | null>(null);
+  const [user,                    setUser]                    = useState<any>(null);
+  const [selectedPaymentMethod,   setSelectedPaymentMethod]   = useState<PaymentMethod>(
+    // Only accept valid values from query param
+    preMethod === 'mpesa' || preMethod === 'paystack' ? preMethod : null
+  );
+
+  // M-Pesa specific state — pre-populate from query param if supplied
+  const [mpesaPhone,         setMpesaPhone]         = useState(prePhone.replace(/\D/g, '').slice(0, 9));
+  const [mpesaStep,          setMpesaStep]           = useState<'idle' | 'prompt_sent' | 'confirming'>('idle');
+  const [pollTimeoutReached, setPollTimeoutReached]  = useState(false);
 
   // Refs to clear intervals/timeouts on unmount
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,9 +102,7 @@ const CheckoutPayment = () => {
         if (data?.payment_status === 'paid') {
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (pollTimeoutRef.current)  clearTimeout(pollTimeoutRef.current);
-          navigate(
-            `/payment-success?order_id=${orderId}&order_number=${data.order_number}`
-          );
+          navigate(`/payment-success?order_id=${orderId}&order_number=${data.order_number}`);
         }
       } catch (err) {
         console.error('Polling error:', err);
@@ -147,6 +165,13 @@ const CheckoutPayment = () => {
 
       if (orderData.payment_status === 'paid') {
         navigate(`/payment-success?order_id=${orderId}&order_number=${orderData.order_number}`);
+      }
+
+      // If no method was pre-selected via query param but the order has a
+      // previously used payment_method, pre-select that method too.
+      if (!preMethod && orderData.payment_method) {
+        const m = orderData.payment_method as PaymentMethod;
+        if (m === 'mpesa' || m === 'paystack') setSelectedPaymentMethod(m);
       }
     } catch (err: any) {
       console.error('Error fetching order:', err);
@@ -281,16 +306,30 @@ const CheckoutPayment = () => {
           {/* Header */}
           <div className="mb-6">
             <button
-              onClick={() => navigate('/books')}
+              onClick={() => navigate(-1)}
               className="flex items-center gap-2 text-muted-foreground hover:text-primary mb-4"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Shopping
+              Back
             </button>
             <h1 className="font-serif text-3xl font-bold flex items-center gap-2">
               <CreditCard className="h-8 w-8" />
               Complete Your Payment
             </h1>
+
+            {/*
+            Pre-population hint — shown when arriving from dashboard
+            {(preMethod || prePhone) && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-2 w-fit">
+                <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  Payment details pre-filled from your account
+                  {preMethod && <> · <strong className="capitalize">{preMethod}</strong> selected</>}
+                  {prePhone  && <> · Phone <strong>+254 {prePhone}</strong></>}
+                </span>
+              </div>
+            )}
+            */}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -346,21 +385,17 @@ const CheckoutPayment = () => {
                         <img
                           src={item.content.cover_image_url || '/placeholder-book.png'}
                           alt={item.content.title}
-                          className="w-20 h-28 object-cover rounded"
+                          className="w-20 h-28 object-cover rounded flex-shrink-0"
                         />
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-lg">{item.content.title}</h3>
-                          <p className="text-muted-foreground text-sm mt-1">
-                            by {item.content.author}
-                          </p>
+                          <p className="text-muted-foreground text-sm mt-1">by {item.content.author}</p>
                           <div className="flex items-center gap-4 mt-2">
                             <p className="text-muted-foreground text-sm">Qty: {item.quantity}</p>
-                            <p className="text-primary font-semibold">
-                              KES {item.unit_price.toLocaleString()}
-                            </p>
+                            <p className="text-primary font-semibold">KES {item.unit_price.toLocaleString()}</p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0">
                           <p className="font-semibold">KES {item.total_price.toLocaleString()}</p>
                         </div>
                       </div>
@@ -370,10 +405,12 @@ const CheckoutPayment = () => {
               )}
 
               {/* Shipping Address */}
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
-                <p className="text-muted-foreground">{order.shipping_address}</p>
-              </div>
+              {order.shipping_address && (
+                <div className="bg-white rounded-lg shadow-sm p-6">
+                  <h2 className="text-xl font-semibold mb-4">Shipping Address</h2>
+                  <p className="text-muted-foreground">{order.shipping_address}</p>
+                </div>
+              )}
 
               {/* Payment Method Selection */}
               {order.payment_status !== 'paid' && (
@@ -402,7 +439,7 @@ const CheckoutPayment = () => {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900 leading-tight">M-Pesa</p>
-                          <p className="text-xs text-muted-foreground">Safaricom Daraja</p>
+                          {/* <p className="text-xs text-muted-foreground">Safaricom Daraja</p> */}
                         </div>
                       </div>
                       {selectedPaymentMethod === 'mpesa' && (
@@ -431,7 +468,7 @@ const CheckoutPayment = () => {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900 leading-tight">Paystack</p>
-                          <p className="text-xs text-muted-foreground">Card / Bank Transfer</p>
+                          {/* <p className="text-xs text-muted-foreground">Card / Bank Transfer</p> */}
                         </div>
                       </div>
                       {selectedPaymentMethod === 'paystack' && (
@@ -440,7 +477,7 @@ const CheckoutPayment = () => {
                     </button>
                   </div>
 
-                  {/* Phone input */}
+                  {/* Phone input — shown when M-Pesa selected and not yet sent */}
                   {selectedPaymentMethod === 'mpesa' && mpesaStep === 'idle' && (
                     <div className="mt-5 space-y-2">
                       <label htmlFor="mpesa-phone" className="block text-sm font-medium text-gray-700">
@@ -461,9 +498,16 @@ const CheckoutPayment = () => {
                           className="flex-1 h-10 rounded-r-lg border border-gray-300 px-3 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
                         />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Enter the number registered on your M-Pesa account.
-                      </p>
+                      {mpesaPhone.length === 9 && (
+                        <p className="text-xs text-green-600 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Number ready: +254 {mpesaPhone}
+                        </p>
+                      )}
+                      {mpesaPhone.length > 0 && mpesaPhone.length < 9 && (
+                        <p className="text-xs text-muted-foreground">
+                          Enter the 9-digit number registered on your M-Pesa account.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -514,15 +558,15 @@ const CheckoutPayment = () => {
                 <div className="space-y-3 mb-6">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">KES {order.sub_total.toLocaleString()}</span>
+                    <span className="font-medium">KES {(order.sub_total || 0).toLocaleString()}</span>
                   </div>
-                  {order.discount > 0 && (
+                  {(order.discount || 0) > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Discount</span>
                       <span className="font-medium">-KES {order.discount.toLocaleString()}</span>
                     </div>
                   )}
-                  {order.tax > 0 && (
+                  {(order.tax || 0) > 0 && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Tax</span>
                       <span className="font-medium">KES {order.tax.toLocaleString()}</span>
@@ -531,7 +575,7 @@ const CheckoutPayment = () => {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Shipping</span>
                     <span className="font-medium">
-                      {order.shipping === 0 ? 'FREE' : `KES ${order.shipping.toLocaleString()}`}
+                      {(order.shipping || 0) === 0 ? 'FREE' : `KES ${order.shipping.toLocaleString()}`}
                     </span>
                   </div>
                   <div className="border-t pt-3 flex justify-between text-lg font-bold">

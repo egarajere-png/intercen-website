@@ -1,7 +1,7 @@
 import { Layout } from '@/components/layout/Layout';
 import { Seo } from '@/components/Seo';
 import { HeroSection } from '@/components/home/HeroSection';
-import { FeaturedBooks } from '@/components/home/FeaturedBooks';
+import FeaturedBooks from '@/components/home/FeaturedBooks';
 import { CategorySection } from '@/components/home/CategorySection';
 import { BestsellerSection } from '@/components/home/BestsellerSection';
 import { PromoBanner } from '@/components/home/PromoBanner';
@@ -16,7 +16,7 @@ const Index = () => {
         canonical="https://www.intercenbooks.com/"
       />
       <HeroSection />
-      {/* <FeaturedBooks /> */}
+      <FeaturedBooks />
       <CategorySection />
       <PromoBanner />
       {/* <BestsellerSection /> */}

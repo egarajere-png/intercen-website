@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
       })
     }
 
+    // Authenticate user
     const authHeader = req.headers.get('authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -58,10 +59,11 @@ Deno.serve(async (req) => {
 
     console.log('User authenticated:', user.id)
 
+    // Parse request body
     let body: PublishRequest
     try {
       body = await req.json()
-    } catch (_e) {
+    } catch (e) {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -88,6 +90,7 @@ Deno.serve(async (req) => {
 
     console.log(`Action: ${action} for content: ${content_id}`)
 
+    // Fetch existing content
     const { data: content, error: fetchError } = await supabaseAdmin
       .from('content')
       .select('*')
@@ -103,18 +106,29 @@ Deno.serve(async (req) => {
 
     console.log('Content found:', content.title)
 
-    let hasPermission = content.uploaded_by === user.id
+    // Verify ownership
+    // Check if user is platform admin
+    let hasPermission = false;
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
 
-    if (!hasPermission && content.organization_id) {
+    if (profile?.role === 'admin') {
+      hasPermission = true;
+    } else if (content.uploaded_by === user.id) {
+      hasPermission = true;
+    } else if (content.organization_id) {
+      // Check if user is admin of the organization
       const { data: orgMember } = await supabaseAdmin
         .from('organization_members')
         .select('role')
         .eq('organization_id', content.organization_id)
         .eq('user_id', user.id)
-        .single()
-
+        .single();
       if (orgMember && ['admin', 'moderator'].includes(orgMember.role)) {
-        hasPermission = true
+        hasPermission = true;
       }
     }
 
@@ -122,14 +136,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Insufficient permissions' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
+      });
     }
 
-    console.log('Permission granted')
+    console.log('Permission granted');
 
+    // Handle publishing
     if (action === 'publish') {
       console.log('Publishing content...')
 
+      // Validate required fields
       const validationErrors: ValidationError[] = []
 
       if (!content.cover_image_url) {
@@ -153,6 +169,8 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Content file is no longer required for publishing
+
       if (validationErrors.length > 0) {
         console.log('Validation failed:', validationErrors)
         return new Response(JSON.stringify({
@@ -164,6 +182,7 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Check if already published
       if (content.status === 'published') {
         return new Response(JSON.stringify({
           message: 'Content is already published',
@@ -174,6 +193,7 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Update to published
       const { data: updatedContent, error: updateError } = await supabaseAdmin
         .from('content')
         .update({
@@ -198,11 +218,13 @@ Deno.serve(async (req) => {
 
       console.log('Content published successfully')
 
+      // Send notification if enabled
       if (send_notification) {
         try {
           await sendPublishNotification(supabaseAdmin, updatedContent, user)
         } catch (notifErr) {
           console.warn('Notification failed:', notifErr)
+          // Don't fail the request if notification fails
         }
       }
 
@@ -222,6 +244,7 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Handle unpublishing
     if (action === 'unpublish') {
       console.log('Unpublishing content...')
 
@@ -235,6 +258,7 @@ Deno.serve(async (req) => {
         })
       }
 
+      // Update to archived and remove from featured sections
       const { data: updatedContent, error: updateError } = await supabaseAdmin
         .from('content')
         .update({
@@ -261,6 +285,7 @@ Deno.serve(async (req) => {
 
       console.log('Content unpublished successfully')
 
+      // Send notification if enabled
       if (send_notification) {
         try {
           await sendUnpublishNotification(supabaseAdmin, updatedContent, user)
@@ -309,14 +334,16 @@ Deno.serve(async (req) => {
   }
 })
 
+// Helper function to send publish notification
 async function sendPublishNotification(
-  supabase: ReturnType<typeof createClient>,
-  content: Record<string, unknown>,
-  _user: Record<string, unknown>
+  supabase: any,
+  content: any,
+  user: any
 ) {
   console.log('Sending publish notification...')
 
   try {
+    // Create notification record
     const notification = {
       user_id: content.uploaded_by,
       type: 'content_published',
@@ -337,6 +364,7 @@ async function sendPublishNotification(
       console.log('Publish notification created')
     }
 
+    // If organization content, notify org members
     if (content.organization_id) {
       const { data: orgMembers } = await supabase
         .from('organization_members')
@@ -345,7 +373,7 @@ async function sendPublishNotification(
         .neq('user_id', content.uploaded_by)
 
       if (orgMembers && orgMembers.length > 0) {
-        const orgNotifications = orgMembers.map((member: { user_id: string }) => ({
+        const orgNotifications = orgMembers.map((member: any) => ({
           user_id: member.user_id,
           type: 'org_content_published',
           title: 'New Organization Content',
@@ -368,10 +396,11 @@ async function sendPublishNotification(
   }
 }
 
+// Helper function to send unpublish notification
 async function sendUnpublishNotification(
-  supabase: ReturnType<typeof createClient>,
-  content: Record<string, unknown>,
-  _user: Record<string, unknown>
+  supabase: any,
+  content: any,
+  user: any
 ) {
   console.log('Sending unpublish notification...')
 
