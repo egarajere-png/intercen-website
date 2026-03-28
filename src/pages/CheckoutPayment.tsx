@@ -500,7 +500,7 @@ const CheckoutPayment = () => {
                       </div>
                       {mpesaPhone.length === 9 && (
                         <p className="text-xs text-green-600 flex items-center gap-1">
-                          <CheckCircle className="h-3 w-3" /> Number ready: +254 {mpesaPhone}
+                          {/* <CheckCircle className="h-3 w-3" /> Number ready: +254 {mpesaPhone} */}
                         </p>
                       )}
                       {mpesaPhone.length > 0 && mpesaPhone.length < 9 && (

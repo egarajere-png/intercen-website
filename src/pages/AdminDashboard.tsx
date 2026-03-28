@@ -10,6 +10,8 @@
 //  ✅ Notification types match DB constraint exactly
 //  ✅ Publication actions record correct notification types
 //  ✅ All important admin operations recorded in notifications table
+//  ✅ NEW: Withdrawals tab — AdminWithdrawals component integrated
+//  ✅ NEW: Pending withdrawals badge on tab
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -24,13 +26,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AdminWithdrawals from '@/components/AdminWithdrawals';
 import {
   Users, BookOpen, FileText, ShoppingCart,
   CheckCircle, XCircle, Clock, Shield, Edit3, Eye,
   AlertCircle, Search, RefreshCw,
   LogOut, Save, Camera, User, Trash2, Globe, EyeOff,
   ChevronDown, ChevronUp, Star, Grid3X3, List, Plus,
-  StickyNote, Rocket, AlertTriangle,
+  StickyNote, Rocket, AlertTriangle, Banknote,
 } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -231,6 +234,9 @@ export default function AdminDashboard() {
   const [selectedOrders,     setSelectedOrders]     = useState<string[]>([]);
   const [orderNotes,         setOrderNotes]         = useState<Record<string, string>>({});
 
+  // ── withdrawals badge count ───────────────────────────────────────────────
+  const [pendingWithdrawalsCount, setPendingWithdrawalsCount] = useState(0);
+
   // ── init ──────────────────────────────────────────────────────────────────
 
   useEffect(() => { if (userId) loadAll(); }, [userId]);
@@ -253,13 +259,18 @@ export default function AdminDashboard() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [profileRes, usersRes, pubRes] = await Promise.all([
+      const [profileRes, usersRes, pubRes, withdrawalRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
         supabase.from('profiles').select('*').order('created_at', { ascending: false }),
         supabase
           .from('publication_requests_view')
           .select('*')
           .order('created_at', { ascending: false }),
+        // Peek at pending withdrawal count for badge
+        supabase
+          .from('withdrawal_requests')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pending'),
       ]);
 
       const p = profileRes.data;
@@ -275,6 +286,7 @@ export default function AdminDashboard() {
       setUsers(usersRes.data || []);
       setFilteredUsers(usersRes.data || []);
       setPublications(pubRes.data   || []);
+      setPendingWithdrawalsCount(withdrawalRes.count ?? 0);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Load failed', description: err.message });
     } finally {
@@ -340,30 +352,20 @@ export default function AdminDashboard() {
 
   // ── content actions ───────────────────────────────────────────────────────
 
-  /**
-   * Publish or unpublish a content item via the content-publish edge function.
-   * After success:
-   *  - Updates local state
-   *  - Records a notification for the content owner (valid types from DB constraint)
-   *  - Fires the send-content-status-email edge function to email the owner
-   */
   const handlePublishContent = async (contentId: string, action: 'publish' | 'unpublish') => {
     setPublishingContent(contentId);
     try {
-      // Call the content-publish edge function
       const result = await callEdgeFunction('content-publish', {
         content_id: contentId,
         action,
-        send_notification: false, // We handle notifications ourselves below
+        send_notification: false,
       });
 
       const newStatus = action === 'publish' ? 'published' : 'archived';
       setContentItems(prev => prev.map(c => c.id === contentId ? { ...c, status: newStatus } : c));
 
-      // Find the content item to get the uploaded_by
       const contentItem = contentItems.find(c => c.id === contentId);
       if (contentItem?.uploaded_by) {
-        // Record notification
         const notifType   = action === 'publish' ? 'content_published' : 'content_unpublished';
         const notifTitle  = action === 'publish' ? 'Content Published' : 'Content Unpublished';
         const notifMsg    = action === 'publish'
@@ -379,15 +381,13 @@ export default function AdminDashboard() {
           read:       false,
         });
 
-        // Fire email to content owner
         try {
           await callEdgeFunction('send-content-status-email', {
-            content_id: contentId,
+            content_id:    contentId,
             action,
             content_title: contentItem.title,
           });
         } catch (emailErr: any) {
-          // Email failure is non-fatal; log but don't block
           console.warn('Content status email failed:', emailErr.message);
         }
       }
@@ -445,12 +445,6 @@ export default function AdminDashboard() {
 
   // ── order actions ─────────────────────────────────────────────────────────
 
-  /**
-   * Update order status, then:
-   *  - Record a notification for the customer (type: 'order_completed' for completed/delivered,
-   *    'purchase_confirmed' for paid, 'general' for others)
-   *  - Send an email via send-order-status-email edge function
-   */
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingOrder(orderId);
     const updates: any = { status: newStatus, updated_at: new Date().toISOString() };
@@ -468,8 +462,6 @@ export default function AdminDashboard() {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
 
     if (order?.user_id) {
-      // Choose a valid notification type from the DB constraint
-      // Valid: 'order_completed' | 'purchase_confirmed' | 'general' | 'system_announcement'
       const notifType = (newStatus === 'completed' || newStatus === 'delivered')
         ? 'order_completed'
         : 'general';
@@ -505,7 +497,6 @@ export default function AdminDashboard() {
         },
       });
 
-      // Send email notification to customer about order status change
       try {
         await callEdgeFunction('send-order-status-email', {
           order_id:   orderId,
@@ -535,7 +526,6 @@ export default function AdminDashboard() {
     const order = orders.find(o => o.id === orderId);
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updates } : o));
 
-    // Notify customer when payment is confirmed
     if (newPayment === 'paid' && order?.user_id) {
       await supabase.from('notifications').insert({
         user_id: order.user_id,
@@ -647,8 +637,6 @@ export default function AdminDashboard() {
 
       const pub = publications.find(p => p.id === pubId);
       if (pub?.submitted_by) {
-        // Valid notification types from DB constraint:
-        // 'submission_approved' | 'submission_rejected' | 'general'
         const notifType = action === 'approved'
           ? 'submission_approved'
           : action === 'rejected'
@@ -727,10 +715,6 @@ export default function AdminDashboard() {
     setSavingNotes(false);
   };
 
-  /**
-   * Publish an approved manuscript as live content.
-   * Calls the publication-publish edge function, then records a notification.
-   */
   const publishManuscriptAsContent = (pub: any) => {
     confirm({
       title:        'Publish as Live Content',
@@ -743,38 +727,25 @@ export default function AdminDashboard() {
   const _doPublishManuscript = async (pub: any) => {
     setPublishingAsContent(pub.id);
     try {
-      const result = await callEdgeFunction('content-publish', {
+      const result = await callEdgeFunction('publication-publish', {
         publication_id: pub.id,
       });
 
-      // Record notification for the author
       if (pub.submitted_by) {
-        await supabase.from('notifications').insert({
-          user_id:  pub.submitted_by,
-          type:     'content_published',
-          title:    'Your Book is Now Live! 🎉',
-          message:  `"${pub.title}" has been published on Intercen Books and is now available to readers.`,
-          read:     false,
-          metadata: { publication_id: pub.id, title: pub.title },
-        });
-        // Fire email to author
         try {
           await callEdgeFunction('send-content-status-email', {
-            content_id: result.content_id || pub.content_id || pub.id, // use returned content_id if available
-            action: 'publish',
+            content_id:    result.content_id,
+            action:        'publish',
             content_title: pub.title,
           });
         } catch (emailErr: any) {
-          // Email failure is non-fatal; log but don't block
           console.warn('Content status email failed:', emailErr.message);
         }
       }
 
       toast({
         title:       '🎉 Manuscript published!',
-        description: result.email_sent
-          ? `"${pub.title}" is now live. Author notified by email.`
-          : `"${pub.title}" is now live. In-app notification sent.`,
+        description: `"${pub.title}" is now live.`,
       });
 
       loadContent();
@@ -801,7 +772,6 @@ export default function AdminDashboard() {
       if (error) throw error;
       setUsers(prev => prev.map(u => u.id === targetId ? { ...u, role: newRole } : u));
 
-      // 'role_changed' IS a valid type per the DB constraint
       await supabase.from('notifications').insert({
         user_id: targetId,
         type:    'role_changed',
@@ -1023,7 +993,6 @@ export default function AdminDashboard() {
         <div className="p-3">
           <h4 className="font-medium text-sm line-clamp-1">{item.title}</h4>
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.author || '—'}</p>
-          {/* Publish toggle badge below card info */}
           <div className="flex items-center justify-between mt-2">
             <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded capitalize">{item.content_type}</span>
             <span className="text-sm font-semibold">
@@ -1140,7 +1109,7 @@ export default function AdminDashboard() {
 
         <Header />
 
-        {/* Hero banner — Upload Content / Content Manager buttons REMOVED (they were duplicates) */}
+        {/* Hero banner */}
         <div className="bg-charcoal text-white border-b border-white/5">
           <div className="container max-w-7xl mx-auto px-4 py-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -1180,7 +1149,7 @@ export default function AdminDashboard() {
 
           {/* Pending submissions alert */}
           {pendingPubs.length > 0 && (
-            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
               <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0" />
               <span className="font-medium text-amber-800 flex-1 text-sm">
                 {pendingPubs.length} manuscript{pendingPubs.length !== 1 ? 's' : ''} awaiting editorial review
@@ -1192,18 +1161,37 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {/* Pending withdrawals alert */}
+          {pendingWithdrawalsCount > 0 && (
+            <div className="mb-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+              <Banknote className="h-5 w-5 text-green-600 flex-shrink-0" />
+              <span className="font-medium text-green-800 flex-1 text-sm">
+                {pendingWithdrawalsCount} author withdrawal{pendingWithdrawalsCount !== 1 ? 's' : ''} awaiting payment
+              </span>
+              <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white text-xs h-8"
+                onClick={() => (document.querySelector('[value="withdrawals"]') as HTMLElement)?.click()}>
+                Process Now
+              </Button>
+            </div>
+          )}
+
           <Tabs defaultValue="content" className="space-y-6">
             <TabsList className="h-auto p-1 gap-1 bg-muted/50 flex-wrap">
               {[
-                { value: 'content',      label: 'Content Library',  icon: BookOpen     },
-                { value: 'orders',       label: 'Orders',           icon: ShoppingCart },
+                { value: 'content',     label: 'Content Library',  icon: BookOpen     },
+                { value: 'orders',      label: 'Orders',           icon: ShoppingCart },
                 {
                   value: 'publications',
                   label: `Submissions${pendingPubs.length > 0 ? ` (${pendingPubs.length})` : ''}`,
-                  icon: FileText
+                  icon: FileText,
                 },
-                { value: 'users',        label: 'Users',            icon: Users        },
-                { value: 'profile',      label: 'My Profile',       icon: User         },
+                {
+                  value: 'withdrawals',
+                  label: `Withdrawals${pendingWithdrawalsCount > 0 ? ` (${pendingWithdrawalsCount})` : ''}`,
+                  icon: Banknote,
+                },
+                { value: 'users',       label: 'Users',            icon: Users        },
+                { value: 'profile',     label: 'My Profile',       icon: User         },
               ].map(({ value, label, icon: Icon }) => (
                 <TabsTrigger key={value} value={value}
                   className="gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg">
@@ -1846,6 +1834,11 @@ export default function AdminDashboard() {
               )}
             </TabsContent>
 
+            {/* ═══════════════════════ WITHDRAWALS TAB ════════════════════════ */}
+            <TabsContent value="withdrawals">
+              <AdminWithdrawals />
+            </TabsContent>
+
             {/* ════════════════════════ USERS TAB ════════════════════════════ */}
             <TabsContent value="users">
               <Card className="shadow-soft">
@@ -2006,7 +1999,7 @@ export default function AdminDashboard() {
                       <Textarea value={bio} onChange={e => setBio(e.target.value)}
                         maxLength={MAX_BIO} rows={4} placeholder="About you…" disabled={saving} />
                     </div>
-                    <div className="flex gap-4 items-center flex-wrap pt-2">
+                    <div className="flex gap-4 items-center flex-wrap  pt-2">
                       <Button onClick={saveProfile} disabled={saving} className="gap-2">
                         <Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save Changes'}
                       </Button>

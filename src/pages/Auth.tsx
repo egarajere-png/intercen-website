@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/SupabaseClient';
 import intercenLogo from '@/assets/intercen-books-logo.png';
@@ -14,6 +15,7 @@ const Auth = () => {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  const [dataConsent, setDataConsent] = useState(false);
   const navigate = useNavigate();
 
   const getEndpointUrl = (functionName: string) => {
@@ -72,13 +74,19 @@ const Auth = () => {
       return;
     }
 
+    if (!dataConsent) {
+      toast.error('You must consent to the use of your information to create an account');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/profile-setup`,
-          data: { full_name },
+          data: { full_name, data_consent: true, data_consent_date: new Date().toISOString() },
         },
       });
 
@@ -86,6 +94,7 @@ const Auth = () => {
 
       toast.success('Account created! Please check your email to verify your account.');
       form.reset();
+      setDataConsent(false);
     } catch (err: unknown) {
       const error = err as Error;
       console.error('Registration error:', error);
@@ -326,22 +335,10 @@ const Auth = () => {
                     onClick={handleGoogleSignIn}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24">
-                      <path
-                        fill="currentColor"
-                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                      />
-                      <path
-                        fill="currentColor"
-                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                      />
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                     </svg>
                     Continue with Google
                   </Button>
@@ -416,7 +413,42 @@ const Auth = () => {
                       <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
                     </div>
 
-                    <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+                    {/* ── Data Consent – always visible, required ── */}
+                    <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-3">
+                      <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                        Data Use Consent <span className="text-destructive">*</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        InterCEN Books collects and uses your personal information (name, email address,
+                        purchase history, and browsing activity) to process your orders, manage your
+                        account, personalise your shopping experience, and send you relevant offers and
+                        promotions. Your data will not be sold to third parties. You may withdraw this
+                        consent at any time by contacting us or updating your account settings.
+                      </p>
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          id="data-consent"
+                          checked={dataConsent}
+                          onCheckedChange={(checked) => setDataConsent(checked === true)}
+                          className="mt-0.5 shrink-0"
+                          aria-required="true"
+                        />
+                        <Label
+                          htmlFor="data-consent"
+                          className="text-sm leading-snug cursor-pointer"
+                        >
+                          I consent to InterCEN Books using my personal information to manage my
+                          account and sales activity as described above.{' '}
+                          <span className="text-destructive font-medium">(Required)</span>
+                        </Label>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full bg-primary hover:bg-primary/90"
+                      disabled={isLoading || !dataConsent}
+                    >
                       {isLoading ? 'Creating account...' : 'Create Account'}
                     </Button>
                   </form>

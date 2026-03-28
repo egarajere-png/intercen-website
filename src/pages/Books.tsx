@@ -1,6 +1,8 @@
 /**
  * Books/Content Library Page
- * Displays content with search, filtering, and add-to-cart functionality
+ * Displays content with search, filtering, and add-to-cart functionality.
+ * Authenticated users who already own a book see an "Owned" badge and a
+ * direct Download button instead of Add to Cart.
  */
 
 import { useState, useEffect } from 'react';
@@ -32,236 +34,234 @@ import { supabase } from '@/lib/SupabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import { useCart } from '@/contexts/CartContext';
 
-// Categories with slugs matching the database
+// ── Static data ───────────────────────────────────────────────────────────────
+
 const categories = [
-  { id: 'fiction', slug: 'fiction', name: 'Fiction' },
-  { id: 'non-fiction', slug: 'non-fiction', name: 'Non-Fiction' },
+  { id: 'fiction',          slug: 'fiction',          name: 'Fiction' },
+  { id: 'non-fiction',      slug: 'non-fiction',      name: 'Non-Fiction' },
   { id: 'mystery-thriller', slug: 'mystery-thriller', name: 'Mystery & Thriller' },
-  { id: 'fantasy', slug: 'fantasy', name: 'Fantasy' },
-  { id: 'science-fiction', slug: 'science-fiction', name: 'Science Fiction' },
-  { id: 'academic', slug: 'academic', name: 'Academic & Education' },
-  { id: 'business', slug: 'business', name: 'Business & Economics' },
-  { id: 'technology', slug: 'technology', name: 'Technology & Programming' },
+  { id: 'fantasy',          slug: 'fantasy',          name: 'Fantasy' },
+  { id: 'science-fiction',  slug: 'science-fiction',  name: 'Science Fiction' },
+  { id: 'academic',         slug: 'academic',         name: 'Academic & Education' },
+  { id: 'business',         slug: 'business',         name: 'Business & Economics' },
+  { id: 'technology',       slug: 'technology',       name: 'Technology & Programming' },
 ];
 
-// All content types from the database
 const CONTENT_TYPES = [
-  { value: 'book', label: 'Book' },
-  { value: 'ebook', label: 'E-Book' },
+  { value: 'book',     label: 'Book' },
+  { value: 'ebook',    label: 'E-Book' },
   { value: 'document', label: 'Document' },
-  { value: 'paper', label: 'Paper' },
-  { value: 'report', label: 'Report' },
-  { value: 'manual', label: 'Manual' },
-  { value: 'guide', label: 'Guide' },
+  { value: 'paper',    label: 'Paper' },
+  { value: 'report',   label: 'Report' },
+  { value: 'manual',   label: 'Manual' },
+  { value: 'guide',    label: 'Guide' },
 ];
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 const Books = () => {
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery]               = useState('');
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState('featured');
+  const [sortBy, setSortBy]         = useState('featured');
   const [priceRange, setPriceRange] = useState<string>('all');
   const [visibility, setVisibility] = useState<string>('all');
-  const [content, setContent] = useState<Content[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [page, setPage] = useState(1);
+  const [content, setContent]       = useState<Content[]>([]);
+  const [loading, setLoading]       = useState(false);
+  const [page, setPage]             = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalResults, setTotalResults] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
   const [fetchTrigger, setFetchTrigger] = useState(0);
-  const { toast } = useToast();
+
+  /** Set of content IDs the current user already owns */
+  const [purchasedIds, setPurchasedIds] = useState<Set<string>>(new Set());
+
+  const { toast }                     = useToast();
   const { addToCart: addToCartContext } = useCart();
 
-  // Force refetch when navigating back to this page
+  // ── Re-fetch when route changes ─────────────────────────────────────────────
   useEffect(() => {
     setFetchTrigger(prev => prev + 1);
   }, [location.pathname]);
 
+  // ── Fetch owned content IDs for the authenticated user ───────────────────────
   useEffect(() => {
-    const fetchContent = async () => {
-      setLoading(true);
-      setError(null);
-
-      // Build filters for edge function, only include non-empty values
-      const filters: any = {};
-
-      // Filter by category - use category_slug instead of category_id
-      if (selectedCategories.length === 1) {
-        const cat = categories.find(c => c.slug === selectedCategories[0]);
-        if (cat) {
-          filters.category_slug = cat.slug;
-        }
-      }
-
-      // Filter by content types
-      if (selectedContentTypes.length > 0) {
-        filters.content_types = selectedContentTypes.filter(Boolean);
-      }
-
-      // Filter by price range
-      if (priceRange !== 'all') {
-        if (priceRange === 'free') {
-          filters.is_free = true;
-        } else if (priceRange === 'under-15') {
-          filters.price_max = 2000;
-        } else if (priceRange === '15-25') {
-          filters.price_min = 2000;
-          filters.price_max = 3500;
-        } else if (priceRange === '25-50') {
-          filters.price_min = 3500;
-          filters.price_max = 7000;
-        } else if (priceRange === 'over-50') {
-          filters.price_min = 7000;
-        }
-      }
-
-      // Filter by visibility (only show public content by default)
-      if (visibility === 'all') {
-        filters.visibility = 'public';
-      } else if (visibility !== 'any') {
-        filters.visibility = visibility;
-      }
-
-      // Remove empty filters
-      Object.keys(filters).forEach(key => {
-        if (
-          filters[key] === undefined ||
-          filters[key] === null ||
-          (Array.isArray(filters[key]) && filters[key].length === 0)
-        ) {
-          delete filters[key];
-        }
-      });
-
-      // Map sortBy to edge function sort_by
-      let sort_by = 'relevance';
-      switch (sortBy) {
-        case 'price-low':
-          sort_by = 'price';
-          break;
-        case 'price-high':
-          sort_by = 'price';
-          break;
-        case 'rating':
-          sort_by = 'rating';
-          break;
-        case 'newest':
-          sort_by = 'newest';
-          break;
-        default:
-          sort_by = 'relevance';
+    const fetchPurchasedIds = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setPurchasedIds(new Set());
+        return;
       }
 
       try {
-        // Get the current session
-        const { data: { session } } = await supabase.auth.getSession();
+        // Step 1: get all completed/paid order IDs for this user
+        const { data: orders, error: ordersErr } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('user_id', session.user.id)
+          .in('status', ['completed', 'paid', 'delivered']);
 
-        // Get Supabase URL from the client
-        const supabaseUrl = supabase.supabaseUrl || import.meta.env.VITE_SUPABASE_URL;
+        if (ordersErr || !orders?.length) return;
 
-        if (!supabaseUrl) {
-          throw new Error('Supabase URL is not configured');
-        }
+        // Step 2: get all content_id values from those orders
+        const orderIds = orders.map(o => o.id);
+        const { data: items, error: itemsErr } = await supabase
+          .from('order_items')
+          .select('content_id')
+          .in('order_id', orderIds);
 
-        // Construct the edge function URL
-        const edgeFunctionUrl = `${supabaseUrl}/functions/v1/content-search`;
+        if (itemsErr || !items?.length) return;
 
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-        };
-
-        // Add authorization header if user is logged in
-        if (session?.access_token) {
-          headers['Authorization'] = `Bearer ${session.access_token}`;
-        }
-
-        const res = await fetch(edgeFunctionUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            query: searchQuery,
-            filters,
-            sort_by,
-            page,
-            page_size: 40,
-          }),
-        });
-
-        if (!res.ok) {
-          let errorText;
-          try {
-            errorText = await res.text();
-            const json = JSON.parse(errorText);
-            errorText = json.error || errorText;
-            if (json.details && typeof json.details === 'string') {
-              errorText += `: ${json.details}`;
-            }
-          } catch {
-            // Not JSON
-          }
-          console.error('Edge function error response:', errorText);
-          throw new Error(`HTTP error! status: ${res.status}, message: ${errorText}`);
-        }
-
-        const result = await res.json();
-        setContent(result.data || []);
-        setTotalPages(result.total_pages || 1);
-        setTotalResults(result.total || 0);
+        const ids = new Set<string>(
+          items
+            .map(i => i.content_id as string)
+            .filter(Boolean)
+        );
+        setPurchasedIds(ids);
       } catch (e) {
-        console.error('Failed to fetch content:', e);
-        setError(e instanceof Error ? e.message : 'Failed to fetch content');
-        setContent([]);
-        setTotalPages(1);
-        setTotalResults(0);
+        console.warn('Could not fetch purchased IDs:', e);
       }
-
-      setLoading(false);
     };
 
-    fetchContent();
-  }, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page, fetchTrigger]);
+    fetchPurchasedIds();
+  }, [location.pathname]);
+
+  // ── Main content fetch ────────────────────────────────────────────────────────
+  // Inside Books.tsx — replace the fetchContent useEffect body only
+
+useEffect(() => {
+  const fetchContent = async () => {
+    setLoading(true);
+    setError(null);
+
+    const filters: any = {};
+
+    if (selectedCategories.length === 1) {
+      const cat = categories.find(c => c.slug === selectedCategories[0]);
+      if (cat) filters.category_slug = cat.slug;
+    }
+
+    if (selectedContentTypes.length > 0) {
+      filters.content_types = selectedContentTypes.filter(Boolean);
+    }
+
+    if (priceRange !== 'all') {
+      if      (priceRange === 'free')     filters.is_free   = true;
+      else if (priceRange === 'under-15') filters.price_max = 2000;
+      else if (priceRange === '15-25')  { filters.price_min = 2000; filters.price_max = 3500; }
+      else if (priceRange === '25-50')  { filters.price_min = 3500; filters.price_max = 7000; }
+      else if (priceRange === 'over-50')  filters.price_min = 7000;
+    }
+
+    if      (visibility === 'all') filters.visibility = 'public';
+    else if (visibility !== 'any') filters.visibility = visibility;
+
+    // Strip empty/null/empty-array values before sending
+    Object.keys(filters).forEach(key => {
+      if (
+        filters[key] === undefined ||
+        filters[key] === null ||
+        (Array.isArray(filters[key]) && filters[key].length === 0)
+      ) delete filters[key];
+    });
+
+    let sort_by = 'relevance';
+    switch (sortBy) {
+      case 'price-low':  sort_by = 'price';      break;
+      case 'price-high': sort_by = 'price_desc'; break;
+      case 'rating':     sort_by = 'rating';     break;
+      case 'newest':     sort_by = 'newest';     break;
+      default:           sort_by = 'relevance';
+    }
+
+    try {
+      // ── Parallelize session fetch — don't block the request ──────────────
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      if (!supabaseUrl) throw new Error('VITE_SUPABASE_URL is not configured');
+
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/content-search`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          query: searchQuery,
+          filters,
+          sort_by,
+          page,
+          page_size: 40,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorText = `HTTP ${res.status}`;
+        try {
+          const text = await res.text();
+          const json = JSON.parse(text);
+          errorText = json.error || text;
+          if (json.details && typeof json.details === 'string') errorText += `: ${json.details}`;
+        } catch { /* not JSON */ }
+        throw new Error(errorText);
+      }
+
+      const result = await res.json();
+      setContent(result.data || []);
+      setTotalPages(result.total_pages || 1);
+      setTotalResults(result.total || 0);
+    } catch (e) {
+      console.error('Failed to fetch content:', e);
+      setError(e instanceof Error ? e.message : 'Failed to fetch content');
+      setContent([]);
+      setTotalPages(1);
+      setTotalResults(0);
+    }
+
+    setLoading(false);
+  };
+
+  fetchContent();
+}, [searchQuery, selectedCategories, selectedContentTypes, sortBy, priceRange, visibility, page, fetchTrigger]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────────
 
   const handleAddToCart = async (contentId: string, quantity: number = 1) => {
     try {
       setAddingToCart(contentId);
-
       const contentItem = content.find(c => c.id === contentId);
-      if (!contentItem) {
-        throw new Error('Content not found');
-      }
-
-      const book = {
-        id: contentItem.id,
-        title: contentItem.title || 'Untitled',
-        author: contentItem.author,
-        price: contentItem.price ?? 0,
-      };
-
-      await addToCartContext(book, quantity);
-    } catch (error: any) {
-      console.error('Error adding to cart:', error);
+      if (!contentItem) throw new Error('Content not found');
+      await addToCartContext(
+        { id: contentItem.id, title: contentItem.title || 'Untitled', author: contentItem.author, price: contentItem.price ?? 0 },
+        quantity,
+      );
+    } catch (err: any) {
+      console.error('Error adding to cart:', err);
     } finally {
       setAddingToCart(null);
     }
   };
 
+  const handleDownload = (contentId: string) => {
+    const item = content.find(c => c.id === contentId);
+    if (item?.file_url) {
+      window.open(item.file_url, '_blank');
+    } else {
+      toast({ title: 'No file available', description: 'The download file is not available yet.', variant: 'destructive' });
+    }
+  };
+
   const toggleCategory = (category: string) => {
-    setSelectedCategories(prev =>
-      prev.includes(category)
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
+    setSelectedCategories(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
     setPage(1);
   };
 
   const toggleContentType = (contentType: string) => {
-    setSelectedContentTypes(prev =>
-      prev.includes(contentType)
-        ? prev.filter(c => c !== contentType)
-        : [...prev, contentType]
-    );
+    setSelectedContentTypes(prev => prev.includes(contentType) ? prev.filter(c => c !== contentType) : [...prev, contentType]);
     setPage(1);
   };
 
@@ -281,97 +281,70 @@ const Books = () => {
     visibility !== 'all' ||
     searchQuery !== '';
 
-  const sortedContent = content;
-
+  // ── Filter sidebar (rendered inline to avoid re-mount on every render) ─────
   const FilterSidebar = () => (
     <div className="space-y-6">
-      {/* Content Types */}
       <div>
         <h3 className="font-semibold mb-4 text-foreground">Content Type</h3>
         <div className="space-y-3">
           {CONTENT_TYPES.map(type => (
-            <label
-              key={type.value}
-              className="flex items-center gap-3 cursor-pointer group"
-            >
+            <label key={type.value} className="flex items-center gap-3 cursor-pointer group">
               <Checkbox
                 checked={selectedContentTypes.includes(type.value)}
                 onCheckedChange={() => toggleContentType(type.value)}
               />
-              <span className="text-sm group-hover:text-primary transition-colors">
-                {type.label}
-              </span>
+              <span className="text-sm group-hover:text-primary transition-colors">{type.label}</span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Categories */}
       <div>
         <h3 className="font-semibold mb-4 text-foreground">Categories</h3>
         <div className="space-y-3">
           {categories.map(category => (
-            <label
-              key={category.id}
-              className="flex items-center gap-3 cursor-pointer group"
-            >
+            <label key={category.id} className="flex items-center gap-3 cursor-pointer group">
               <Checkbox
                 checked={selectedCategories.includes(category.slug)}
                 onCheckedChange={() => toggleCategory(category.slug)}
               />
-              <span className="text-sm group-hover:text-primary transition-colors">
-                {category.name}
-              </span>
+              <span className="text-sm group-hover:text-primary transition-colors">{category.name}</span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Price Range */}
       <div>
         <h3 className="font-semibold mb-4 text-foreground">Price Range</h3>
         <div className="space-y-3">
           {[
-            { value: 'all', label: 'All Prices' },
-            { value: 'free', label: 'Free' },
+            { value: 'all',      label: 'All Prices' },
+            { value: 'free',     label: 'Free' },
             { value: 'under-15', label: 'Under Ksh 2,000' },
-            { value: '15-25', label: 'Ksh 2,000 - Ksh 3,500' },
-            { value: '25-50', label: 'Ksh 3,500 - Ksh 7,000' },
-            { value: 'over-50', label: 'Over Ksh 7,000' },
+            { value: '15-25',    label: 'Ksh 2,000 – Ksh 3,500' },
+            { value: '25-50',    label: 'Ksh 3,500 – Ksh 7,000' },
+            { value: 'over-50',  label: 'Over Ksh 7,000' },
           ].map(range => (
-            <label
-              key={range.value}
-              className="flex items-center gap-3 cursor-pointer group"
-            >
+            <label key={range.value} className="flex items-center gap-3 cursor-pointer group">
               <Checkbox
                 checked={priceRange === range.value}
-                onCheckedChange={() => {
-                  setPriceRange(range.value);
-                  setPage(1);
-                }}
+                onCheckedChange={() => { setPriceRange(range.value); setPage(1); }}
               />
-              <span className="text-sm group-hover:text-primary transition-colors">
-                {range.label}
-              </span>
+              <span className="text-sm group-hover:text-primary transition-colors">{range.label}</span>
             </label>
           ))}
         </div>
       </div>
 
-      {/* Clear Filters */}
       {hasActiveFilters && (
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={clearAllFilters}
-        >
-          <X className="h-4 w-4 mr-2" />
-          Clear All Filters
+        <Button variant="outline" className="w-full" onClick={clearAllFilters}>
+          <X className="h-4 w-4 mr-2" /> Clear All Filters
         </Button>
       )}
     </div>
   );
 
+  // ── Render ─────────────────────────────────────────────────────────────────────
   return (
     <Layout>
       <Seo
@@ -380,28 +353,20 @@ const Books = () => {
         canonical="https://www.intercenbooks.com/books"
       />
 
-      {/* Page Header */}
+      {/* Header */}
       <div className="bg-muted/30 border-b">
         <div className="container py-8 md:py-12">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
-            <Link to="/" className="hover:text-primary transition-colors">
-              Home
-            </Link>
+            <Link to="/" className="hover:text-primary transition-colors">Home</Link>
             <ChevronDown className="h-4 w-4 rotate-[-90deg]" />
             <span className="text-foreground">Content Library</span>
           </nav>
-          <h1 className="headline-2 mb-2">
-            Browse Our Content Library
-          </h1>
+          <h1 className="headline-2 mb-2">Browse Our Content Library</h1>
           <p className="body-2 text-muted-foreground">
-            {loading ? (
-              'Loading content...'
-            ) : error ? (
+            {loading ? 'Loading content…' : error ? (
               <span className="text-destructive">Error loading content</span>
             ) : (
-              <>
-                Discover {totalResults > 0 ? `${totalResults}+` : '0'} books, documents, papers, and more
-              </>
+              <>Discover {totalResults > 0 ? `${totalResults}+` : '0'} books, documents, papers, and more</>
             )}
           </p>
         </div>
@@ -409,41 +374,35 @@ const Books = () => {
 
       <div className="container py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar Filters - Desktop */}
+
+          {/* Desktop sidebar */}
           <aside className="hidden lg:block lg:w-64 flex-shrink-0">
             <div className="sticky top-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="font-semibold text-lg flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  Filters
+                  <Filter className="h-5 w-5" /> Filters
                 </h2>
               </div>
               <FilterSidebar />
             </div>
           </aside>
 
-          {/* Main Content */}
+          {/* Main area */}
           <div className="flex-1">
-            {/* Search and Sort Bar */}
+
+            {/* Search + Sort bar */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              {/* Search */}
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search content, authors, titles, ISBN..."
+                  placeholder="Search content, authors, titles, ISBN…"
                   value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setPage(1);
-                  }}
+                  onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
                   className="pl-9"
                 />
                 {searchQuery && (
                   <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setPage(1);
-                    }}
+                    onClick={() => { setSearchQuery(''); setPage(1); }}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     <X className="h-4 w-4" />
@@ -451,11 +410,7 @@ const Books = () => {
                 )}
               </div>
 
-              {/* Sort */}
-              <Select value={sortBy} onValueChange={(value) => {
-                setSortBy(value);
-                setPage(1);
-              }}>
+              <Select value={sortBy} onValueChange={v => { setSortBy(v); setPage(1); }}>
                 <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -468,7 +423,7 @@ const Books = () => {
                 </SelectContent>
               </Select>
 
-              {/* Mobile Filter Button */}
+              {/* Mobile filter sheet */}
               <Sheet>
                 <SheetTrigger asChild>
                   <Button variant="outline" className="lg:hidden">
@@ -482,44 +437,29 @@ const Books = () => {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-[300px] sm:w-[400px] overflow-y-auto">
-                  <SheetHeader>
-                    <SheetTitle>Filters</SheetTitle>
-                  </SheetHeader>
-                  <div className="mt-6">
-                    <FilterSidebar />
-                  </div>
+                  <SheetHeader><SheetTitle>Filters</SheetTitle></SheetHeader>
+                  <div className="mt-6"><FilterSidebar /></div>
                 </SheetContent>
               </Sheet>
             </div>
 
-            {/* Active Filters */}
+            {/* Active filter badges */}
             {hasActiveFilters && (
               <div className="flex flex-wrap gap-2 mb-6">
                 {searchQuery && (
                   <Badge variant="secondary" className="gap-2">
                     Search: "{searchQuery}"
-                    <button
-                      onClick={() => {
-                        setSearchQuery('');
-                        setPage(1);
-                      }}
-                      className="hover:text-destructive"
-                    >
+                    <button onClick={() => { setSearchQuery(''); setPage(1); }} className="hover:text-destructive">
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
                 )}
                 {selectedContentTypes.map(type => {
-                  const contentType = CONTENT_TYPES.find(ct => ct.value === type);
+                  const ct = CONTENT_TYPES.find(c => c.value === type);
                   return (
                     <Badge key={type} variant="secondary" className="gap-2">
-                      {contentType?.label}
-                      <button
-                        onClick={() => toggleContentType(type)}
-                        className="hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      {ct?.label}
+                      <button onClick={() => toggleContentType(type)} className="hover:text-destructive"><X className="h-3 w-3" /></button>
                     </Badge>
                   );
                 })}
@@ -528,126 +468,93 @@ const Books = () => {
                   return (
                     <Badge key={category} variant="secondary" className="gap-2">
                       {cat?.name}
-                      <button
-                        onClick={() => toggleCategory(category)}
-                        className="hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+                      <button onClick={() => toggleCategory(category)} className="hover:text-destructive"><X className="h-3 w-3" /></button>
                     </Badge>
                   );
                 })}
                 {priceRange !== 'all' && (
                   <Badge variant="secondary" className="gap-2">
-                    {priceRange === 'free' && 'Free'}
+                    {priceRange === 'free'     && 'Free'}
                     {priceRange === 'under-15' && 'Under Ksh 2,000'}
-                    {priceRange === '15-25' && 'Ksh 2,000 - Ksh 3,500'}
-                    {priceRange === '25-50' && 'Ksh 3,500 - Ksh 7,000'}
-                    {priceRange === 'over-50' && 'Over Ksh 7,000'}
-                    <button
-                      onClick={() => {
-                        setPriceRange('all');
-                        setPage(1);
-                      }}
-                      className="hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+                    {priceRange === '15-25'    && 'Ksh 2,000 – Ksh 3,500'}
+                    {priceRange === '25-50'    && 'Ksh 3,500 – Ksh 7,000'}
+                    {priceRange === 'over-50'  && 'Over Ksh 7,000'}
+                    <button onClick={() => { setPriceRange('all'); setPage(1); }} className="hover:text-destructive"><X className="h-3 w-3" /></button>
                   </Badge>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="h-7"
-                >
-                  Clear all
-                </Button>
+                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="h-7">Clear all</Button>
               </div>
             )}
 
-            {/* Error Message */}
+            {/* Error */}
             {error && (
               <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 mb-6">
                 <p className="text-sm text-destructive font-medium mb-2">Failed to load content</p>
-                {(() => {
-                  try {
-                    if (error.startsWith('{') || error.startsWith('[')) {
-                      const parsed = JSON.parse(error);
-                      return (
-                        <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontSize: 12, color: '#b91c1c', background: '#fef2f2', padding: 8, borderRadius: 4, maxHeight: 300, overflow: 'auto' }}>
-                          {JSON.stringify(parsed, null, 2)}
-                        </pre>
-                      );
-                    }
-                  } catch {}
-                  return <p className="text-xs text-muted-foreground mb-3">{error}</p>;
-                })()}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setError(null);
-                    setFetchTrigger(prev => prev + 1);
-                  }}
-                >
+                <p className="text-xs text-muted-foreground mb-3">{error}</p>
+                <Button variant="outline" size="sm" onClick={() => { setError(null); setFetchTrigger(p => p + 1); }}>
                   Retry
                 </Button>
               </div>
             )}
 
-            {/* Results Count */}
-            {!loading && !error && sortedContent.length > 0 && (
+            {/* Results count */}
+            {!loading && !error && content.length > 0 && (
               <div className="mb-4 text-sm text-muted-foreground">
-                Showing {((page - 1) * 40) + 1} - {Math.min(page * 40, totalResults)} of {totalResults} results
+                Showing {((page - 1) * 40) + 1}–{Math.min(page * 40, totalResults)} of {totalResults} results
+                {purchasedIds.size > 0 && (
+                  <span className="ml-2 text-emerald-600 font-medium">
+                    · {purchasedIds.size} owned
+                  </span>
+                )}
               </div>
             )}
 
-            {/* Content Grid */}
+            {/* Grid */}
             {loading ? (
               <div className="flex justify-center items-center py-16">
                 <div className="flex flex-col items-center gap-4">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                  <span className="text-muted-foreground">Loading content...</span>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+                  <span className="text-muted-foreground">Loading content…</span>
                 </div>
               </div>
-            ) : sortedContent.length > 0 ? (
+            ) : content.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                  {sortedContent.map((item, index) => {
+                  {content.map((item, index) => {
+                    const isPurchased = purchasedIds.has(item.id);
                     const book = {
-                      id: item.id,
-                      title: item.title || 'Untitled',
-                      author: item.author || 'Unknown Author',
-                      publisher: item.publisher || '',
-                      price: item.price ?? 0,
-                      originalPrice: undefined,
-                      description: item.description || '',
-                      synopsis: item.description || '',
-                      category: item.category_id || '',
-                      coverImage: item.cover_image_url || '/placeholder-book-cover.png',
+                      id:             item.id,
+                      title:          item.title          || 'Untitled',
+                      author:         item.author         || 'Unknown Author',
+                      publisher:      item.publisher      || '',
+                      price:          item.price          ?? 0,
+                      originalPrice:  undefined,
+                      description:    item.description    || '',
+                      synopsis:       item.description    || '',
+                      category:       item.category_id    || '',
+                      coverImage:     item.cover_image_url || '/placeholder-book-cover.png',
                       backCoverImage: undefined,
-                      previewImages: undefined,
-                      stock: item.stock_quantity ?? 0,
-                      rating: item.average_rating ?? 0,
-                      reviewCount: item.total_reviews ?? 0,
-                      isbn: item.isbn || '',
+                      previewImages:  undefined,
+                      stock:          item.stock_quantity ?? 0,
+                      rating:         item.average_rating ?? 0,
+                      reviewCount:    item.total_reviews  ?? 0,
+                      isbn:           item.isbn           || '',
                       publicationDate: item.published_date || item.published_at || '',
-                      pages: item.page_count ?? 0,
-                      language: item.language || 'en',
-                      featured: item.is_featured ?? false,
-                      bestseller: item.is_bestseller ?? false,
-                      format: item.format || 'pdf',
-                      version: item.version || '1.0',
-                      contentType: item.content_type || 'book',
-                      visibility: item.visibility || 'public',
-                      status: item.status || 'published',
-                      isFree: item.is_free ?? false,
-                      isForSale: item.is_for_sale ?? true,
-                      fileUrl: item.file_url || '',
-                      fileSizeBytes: item.file_size_bytes || 0,
-                      subtitle: item.subtitle || '',
-                      department: item.department || '',
+                      pages:          item.page_count     ?? 0,
+                      language:       item.language       || 'en',
+                      featured:       item.is_featured    ?? false,
+                      bestseller:     item.is_bestseller  ?? false,
+                      format:         item.format         || 'pdf',
+                      version:        item.version        || '1.0',
+                      contentType:    item.content_type   || 'book',
+                      visibility:     item.visibility     || 'public',
+                      status:         item.status         || 'published',
+                      isFree:         item.is_free        ?? false,
+                      isForSale:      item.is_for_sale    ?? true,
+                      fileUrl:        item.file_url       || '',
+                      fileSizeBytes:  item.file_size_bytes || 0,
+                      subtitle:       item.subtitle       || '',
+                      department:     item.department     || '',
                       documentNumber: item.document_number || '',
                       confidentiality: item.confidentiality || '',
                     };
@@ -660,7 +567,9 @@ const Books = () => {
                       >
                         <BookCard
                           book={book}
-                          onAddToCart={handleAddToCart}
+                          isPurchased={isPurchased}
+                          onAddToCart={isPurchased ? undefined : handleAddToCart}
+                          onDownload={isPurchased ? handleDownload : undefined}
                           isAddingToCart={addingToCart === book.id}
                         />
                       </div>
@@ -668,18 +577,14 @@ const Books = () => {
                   })}
                 </div>
 
-                {/* Pagination Controls */}
+                {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 pt-8 border-t">
                     <div className="flex items-center gap-2">
                       <Button
                         disabled={page === 1}
-                        onClick={() => {
-                          setPage(page - 1);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        variant="outline"
-                        size="sm"
+                        onClick={() => { setPage(page - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        variant="outline" size="sm"
                       >
                         Previous
                       </Button>
@@ -687,51 +592,30 @@ const Books = () => {
                       <div className="flex items-center gap-1">
                         {page > 3 && (
                           <>
-                            <Button
-                              variant={page === 1 ? 'default' : 'ghost'}
-                              size="sm"
-                              onClick={() => {
-                                setPage(1);
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                            >
+                            <Button variant={page === 1 ? 'default' : 'ghost'} size="sm"
+                              onClick={() => { setPage(1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
                               1
                             </Button>
-                            {page > 4 && <span className="px-2">...</span>}
+                            {page > 4 && <span className="px-2">…</span>}
                           </>
                         )}
-
                         {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                           const pageNum = Math.max(1, Math.min(page - 2, totalPages - 4)) + i;
                           if (pageNum <= totalPages) {
                             return (
-                              <Button
-                                key={pageNum}
-                                variant={page === pageNum ? 'default' : 'ghost'}
-                                size="sm"
-                                onClick={() => {
-                                  setPage(pageNum);
-                                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                                }}
-                              >
+                              <Button key={pageNum} variant={page === pageNum ? 'default' : 'ghost'} size="sm"
+                                onClick={() => { setPage(pageNum); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
                                 {pageNum}
                               </Button>
                             );
                           }
                           return null;
                         })}
-
                         {page < totalPages - 2 && (
                           <>
-                            {page < totalPages - 3 && <span className="px-2">...</span>}
-                            <Button
-                              variant={page === totalPages ? 'default' : 'ghost'}
-                              size="sm"
-                              onClick={() => {
-                                setPage(totalPages);
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }}
-                            >
+                            {page < totalPages - 3 && <span className="px-2">…</span>}
+                            <Button variant={page === totalPages ? 'default' : 'ghost'} size="sm"
+                              onClick={() => { setPage(totalPages); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
                               {totalPages}
                             </Button>
                           </>
@@ -740,47 +624,30 @@ const Books = () => {
 
                       <Button
                         disabled={page === totalPages}
-                        onClick={() => {
-                          setPage(page + 1);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        variant="outline"
-                        size="sm"
+                        onClick={() => { setPage(page + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        variant="outline" size="sm"
                       >
                         Next
                       </Button>
                     </div>
-
-                    <span className="text-sm text-muted-foreground">
-                      Page {page} of {totalPages}
-                    </span>
+                    <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
                   </div>
                 )}
               </>
             ) : (
               <div className="text-center py-16">
-                <div className="mb-4">
-                  <Search className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
-                  <p className="text-muted-foreground text-lg mb-2">
-                    No content found matching your criteria
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Try adjusting your filters or search query
-                  </p>
-                </div>
+                <Search className="h-16 w-16 text-muted-foreground/50 mx-auto mb-4" />
+                <p className="text-muted-foreground text-lg mb-2">No content found matching your criteria</p>
+                <p className="text-sm text-muted-foreground mb-6">Try adjusting your filters or search query</p>
                 {hasActiveFilters && (
-                  <Button
-                    variant="outline"
-                    onClick={clearAllFilters}
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Clear All Filters
+                  <Button variant="outline" onClick={clearAllFilters}>
+                    <X className="h-4 w-4 mr-2" /> Clear All Filters
                   </Button>
                 )}
               </div>
             )}
           </div>
-        </div>  
+        </div>
       </div>
     </Layout>
   );

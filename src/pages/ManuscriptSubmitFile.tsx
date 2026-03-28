@@ -43,7 +43,6 @@ const ManuscriptSubmitForm = () => {
   const navigate        = useNavigate();
   const [searchParams]  = useSearchParams();
   const defaultType     = searchParams.get('type') as 'traditional' | 'self' | null;
-  // NOTE: Auth guard is handled by <AuthGuard> in App.tsx — no redirect needed here
   const { userId }      = useRole();
   const { toast }       = useToast();
 
@@ -77,46 +76,76 @@ const ManuscriptSubmitForm = () => {
 
   const onSubmit = async (data: FormData) => {
     if (!userId) {
-      toast({ title: 'Not signed in', description: 'Please sign in to submit.', variant: 'destructive' });
+      toast({ 
+        title: 'Not signed in', 
+        description: 'Please sign in to submit your manuscript.', 
+        variant: 'destructive' 
+      });
       navigate('/auth?redirect=/publish/submit');
       return;
     }
+
+    if (!manuscriptFile) {
+      toast({ 
+        title: 'Manuscript required', 
+        description: 'Please upload your manuscript file (PDF or DOCX).', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     setIsSubmitting(true);
+
     try {
       let manuscriptUrl: string | null = null;
       let coverUrl:      string | null = null;
 
-      if (manuscriptFile) manuscriptUrl = await uploadFile(manuscriptFile, 'manuscripts', userId);
-      if (coverFile)      coverUrl      = await uploadFile(coverFile, 'book-covers', userId);
+      // Upload files if provided
+      if (manuscriptFile) {
+        manuscriptUrl = await uploadFile(manuscriptFile, 'manuscripts', userId);
+      }
+      if (coverFile) {
+        coverUrl = await uploadFile(coverFile, 'book-covers', userId);
+      }
 
       const keywords = data.keywords
         ? data.keywords.split(',').map(k => k.trim()).filter(Boolean)
         : [];
 
-      const { error } = await supabase.from('publications').insert({
-        title:               data.title,
-        subtitle:            data.subtitle || null,
-        author_name:         data.author_name,
-        author_email:        data.author_email,
-        author_phone:        data.author_phone || null,
-        author_bio:          data.author_bio,
-        category_id:         data.category_id,
-        description:         data.description,
-        language:            data.language,
-        pages:               data.pages || null,
-        isbn:                data.isbn || null,
-        manuscript_file_url: manuscriptUrl,
-        cover_image_url:     coverUrl,
-        publishing_type:     data.publishing_type,
-        keywords,
-        target_audience:     data.target_audience,
-        rights_confirmed:    data.rights_confirmed,
-        status:              'pending',
-        submitted_by:        userId,
-      });
+      // Insert publication and return the inserted ID
+      const { data: insertedPub, error: insertError } = await supabase
+        .from('publications')
+        .insert({
+          title:               data.title,
+          subtitle:            data.subtitle || null,
+          author_name:         data.author_name,
+          author_email:        data.author_email,
+          author_phone:        data.author_phone || null,
+          author_bio:          data.author_bio,
+          category_id:         data.category_id,
+          description:         data.description,
+          language:            data.language,
+          pages:               data.pages || null,
+          isbn:                data.isbn || null,
+          manuscript_file_url: manuscriptUrl,
+          cover_image_url:     coverUrl,
+          publishing_type:     data.publishing_type,
+          keywords,
+          target_audience:     data.target_audience,
+          rights_confirmed:    data.rights_confirmed,
+          status:              'pending',
+          submitted_by:        userId,
+        })
+        .select('id')
+        .single();
 
-      if (error) throw error;
+      if (insertError || !insertedPub) {
+        throw insertError || new Error('Failed to insert publication');
+      }
 
+      const publicationId = insertedPub.id;
+
+      // Insert internal notification for the user
       await supabase.from('notifications').insert({
         user_id: userId,
         type:    'submission_received',
@@ -124,9 +153,33 @@ const ManuscriptSubmitForm = () => {
         message: `Your manuscript "${data.title}" has been received. We'll review it within 4–6 weeks.`,
       });
 
+      // Trigger email confirmation function
+      const { error: emailError } = await supabase.functions.invoke(
+        'send-manuscript-confirmation',
+        {
+          body: { publication_id: publicationId },
+        }
+      );
+
+      if (emailError) {
+        console.warn("Email function failed but submission succeeded:", emailError.message);
+        // We don't throw here — submission is successful, email is secondary
+      }
+
       setSubmitted(true);
+
+      toast({
+        title: "Manuscript Submitted Successfully",
+        description: "Confirmation emails have been sent to you and our team.",
+      });
+
     } catch (err: any) {
-      toast({ title: 'Submission failed', description: err.message ?? 'Please try again.', variant: 'destructive' });
+      console.error("Submission error:", err);
+      toast({ 
+        title: 'Submission failed', 
+        description: err.message ?? 'Please try again later.', 
+        variant: 'destructive' 
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -258,11 +311,11 @@ const ManuscriptSubmitForm = () => {
               </div>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label>Upload Manuscript (PDF / DOCX)</Label>
+                  <Label>Upload Manuscript (PDF / DOCX) *</Label>
                   <label className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-5 cursor-pointer hover:bg-muted/40 transition-colors">
                     <Upload className="h-5 w-5 text-muted-foreground mb-2" />
                     <span className="text-xs text-muted-foreground text-center">
-                      {manuscriptFile ? manuscriptFile.name : 'Click to upload'}
+                      {manuscriptFile ? manuscriptFile.name : 'Click to upload manuscript'}
                     </span>
                     <input
                       type="file"
@@ -331,7 +384,7 @@ const ManuscriptSubmitForm = () => {
 
             <Button type="submit" size="lg" className="w-full gap-2" disabled={isSubmitting}>
               {isSubmitting
-                ? <><Loader2 className="h-5 w-5 animate-spin" />Submitting…</>
+                ? <><Loader2 className="h-5 w-5 animate-spin" />Submitting Manuscript…</>
                 : 'Submit Manuscript'
               }
             </Button>

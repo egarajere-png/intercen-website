@@ -1,17 +1,9 @@
 // src/pages/AuthorDashboard.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 // Full corrected author dashboard
-//  ✅ Correct DB field names (total_downloads, total_reviews, view_count etc.)
-//  ✅ Order items loaded separately on-demand (matching admin pattern)
-//  ✅ Unpaid orders: prominent banner + "Pay KES X" CTA → CheckoutPayment
-//  ✅ goToCheckout() deep-links with order_id + pre-fills phone + method
-//  ✅ NEW: Performance tab — full analytics table from content fields
-//  ✅ Pending submissions alert banner
-//  ✅ Submission status filter tabs (all/pending/under_review/approved/rejected)
-//  ✅ Works search + status filter + grid with hover actions
-//  ✅ Per-tab Refresh buttons with spinners
-//  ✅ ConfirmDialog hook — no window.confirm / window.alert
-//  ✅ Profile save matches AdminDashboard pattern exactly (email read-only shown)
+//  ✅ All previous fixes retained
+//  ✅ NEW: Wallet tab — AuthorWallet component integrated
+//  ✅ Wallet tab shows badge when available balance > 0
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -26,13 +18,14 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AuthorWallet from '@/components/AuthorWallet';
 import {
   BookOpen, FileText, TrendingUp, Eye, Download,
   Star, CheckCircle, XCircle, Clock, Plus, Edit3, User, BarChart2,
   ShoppingBag, LogOut, Save, Camera, Search, RefreshCw,
   AlertCircle, ChevronDown, ChevronUp, AlertTriangle,
   CreditCard, ArrowRight, Award, Users, Activity,
-  Flame, BookMarked, Rocket,
+  Flame, BookMarked, Rocket, Wallet,
 } from 'lucide-react';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -153,13 +146,15 @@ export default function AuthorDashboard() {
   const [avatarBase64,  setAvatarBase64]  = useState<string | null>(null);
   const [saving,        setSaving]        = useState(false);
 
+  // ── wallet balance peek (for tab badge) ──────────────────────────────────
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
   // ── submissions ───────────────────────────────────────────────────────────
   const [submissions,     setSubmissions]     = useState<any[]>([]);
   const [subStatusFilter, setSubStatusFilter] = useState('all');
   const [subsLoading,     setSubsLoading]     = useState(false);
 
   // ── works ─────────────────────────────────────────────────────────────────
-  // All fields matching the content table schema + content_management_view
   const [works,             setWorks]             = useState<any[]>([]);
   const [worksLoading,      setWorksLoading]      = useState(false);
   const [worksSearch,       setWorksSearch]       = useState('');
@@ -171,7 +166,7 @@ export default function AuthorDashboard() {
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [orderItemsMap, setOrderItemsMap] = useState<Record<string, any[]>>({});
 
-  // ── derived stats — using correct DB field names ──────────────────────────
+  // ── derived stats ─────────────────────────────────────────────────────────
   const totalViews     = works.reduce((s, w) => s + (w.view_count      || 0), 0);
   const totalDownloads = works.reduce((s, w) => s + (w.total_downloads || 0), 0);
   const totalReviews   = works.reduce((s, w) => s + (w.total_reviews   || 0), 0);
@@ -188,7 +183,7 @@ export default function AuthorDashboard() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [profileRes, subsRes, worksRes] = await Promise.all([
+      const [profileRes, subsRes, worksRes, walletRes] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).maybeSingle(),
 
         supabase
@@ -197,7 +192,6 @@ export default function AuthorDashboard() {
           .eq('submitted_by', userId)
           .order('created_at', { ascending: false }),
 
-        // Full content row matching the content table schema from migration
         supabase
           .from('content')
           .select(
@@ -210,6 +204,13 @@ export default function AuthorDashboard() {
           )
           .eq('uploaded_by', userId)
           .order('created_at', { ascending: false }),
+
+        // Peek at wallet balance for tab badge
+        supabase
+          .from('author_wallets')
+          .select('available_balance')
+          .eq('author_id', userId)
+          .maybeSingle(),
       ]);
 
       if (worksRes.error) throw worksRes.error;
@@ -225,12 +226,15 @@ export default function AuthorDashboard() {
       setAvatarUrl(p?.avatar_url   || '');
       setSubmissions(subsRes.data  || []);
       setWorks(worksRes.data       || []);
+
+      if (walletRes.data) {
+        setWalletBalance(parseFloat(walletRes.data.available_balance));
+      }
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Load failed', description: err.message });
     } finally {
       setLoading(false);
     }
-    // Orders independent — don't block the main load
     loadOrders();
   };
 
@@ -265,10 +269,6 @@ export default function AuthorDashboard() {
     setWorksLoading(false);
   };
 
-  /**
-   * Orders are loaded WITHOUT nested order_items to avoid relation errors.
-   * Items are fetched on-demand when the user expands an order (matching admin pattern).
-   */
   const loadOrders = async () => {
     setOrdersLoading(true);
     const { data, error } = await supabase
@@ -286,7 +286,7 @@ export default function AuthorDashboard() {
   };
 
   const loadOrderItems = async (orderId: string) => {
-    if (orderItemsMap[orderId]) return; // already cached
+    if (orderItemsMap[orderId]) return;
     const { data } = await supabase
       .from('order_items')
       .select('*, content(id, title, cover_image_url, content_type, author)')
@@ -364,20 +364,9 @@ export default function AuthorDashboard() {
     });
   };
 
-  // ── deep-link to checkout with pre-populated data ─────────────────────────
-  /**
-   * Navigates to /checkout/payment/:orderId and appends query params so
-   * CheckoutPayment can pre-populate the payment form:
-   *   ?order_id  — the order UUID (also in path)
-   *   ?method    — last used payment_method (mpesa | paystack)
-   *   ?phone     — last 9 digits of profile phone (for M-Pesa pre-fill)
-   */
   const goToCheckout = (order: any) => {
     const params = new URLSearchParams({ order_id: order.id });
-    if (order.payment_method) {
-      params.set('method', order.payment_method);
-    }
-    // Pre-fill phone from profile if available
+    if (order.payment_method) params.set('method', order.payment_method);
     if (profile?.phone) {
       const digits = profile.phone.replace(/\D/g, '').slice(-9);
       if (digits.length >= 9) params.set('phone', digits);
@@ -392,9 +381,7 @@ export default function AuthorDashboard() {
   const underReviewCount = submissions.filter(s => s.status === 'under_review').length;
   const rejectedCount    = submissions.filter(s => s.status === 'rejected').length;
   const publishedCount   = works.filter(w => w.status === 'published').length;
-
-  // Unpaid = payment_status is NOT 'paid' AND order is not cancelled
-  const unpaidOrders = orders.filter(o => o.payment_status !== 'paid' && o.status !== 'cancelled');
+  const unpaidOrders     = orders.filter(o => o.payment_status !== 'paid' && o.status !== 'cancelled');
 
   const filteredSubmissions = subStatusFilter === 'all'
     ? submissions
@@ -529,12 +516,17 @@ export default function AuthorDashboard() {
           <Tabs defaultValue="overview" className="space-y-6">
             <TabsList className="h-auto p-1 gap-1 bg-muted/50 flex-wrap">
               {[
-                { value: 'overview',    label: 'Overview',                                                           icon: BarChart2  },
-                { value: 'performance', label: 'Performance',                                                        icon: Activity   },
-                { value: 'submissions', label: `Submissions${submissions.length > 0 ? ` (${submissions.length})` : ''}`, icon: FileText },
-                { value: 'works',       label: `My Works${works.length > 0 ? ` (${works.length})` : ''}`,           icon: BookOpen   },
-                { value: 'orders',      label: `Orders${orders.length > 0 ? ` (${orders.length})` : ''}`,           icon: ShoppingBag },
-                { value: 'profile',     label: 'Edit Profile',                                                       icon: User       },
+                { value: 'overview',    label: 'Overview',                                                                icon: BarChart2   },
+                { value: 'performance', label: 'Performance',                                                             icon: Activity    },
+                { value: 'wallet',
+                  label: walletBalance !== null && walletBalance > 0
+                    ? `Wallet · KES ${walletBalance.toLocaleString()}`
+                    : 'Wallet',
+                  icon: Wallet },
+                { value: 'submissions', label: `Submissions${submissions.length > 0 ? ` (${submissions.length})` : ''}`, icon: FileText    },
+                { value: 'works',       label: `My Works${works.length > 0 ? ` (${works.length})` : ''}`,                icon: BookOpen    },
+                { value: 'orders',      label: `Orders${orders.length > 0 ? ` (${orders.length})` : ''}`,                icon: ShoppingBag },
+                { value: 'profile',     label: 'Edit Profile',                                                            icon: User        },
               ].map(({ value, label, icon: Icon }) => (
                 <TabsTrigger key={value} value={value}
                   className="gap-2 text-sm data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-lg">
@@ -618,16 +610,12 @@ export default function AuthorDashboard() {
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
                     <h2 className="font-forum text-xl">Content Performance</h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      Real-time analytics for all your works
-                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">Real-time analytics for all your works</p>
                   </div>
                   <Button size="sm" variant="outline" onClick={loadWorks} disabled={worksLoading} className="gap-2">
                     <RefreshCw className={`h-4 w-4 ${worksLoading ? 'animate-spin' : ''}`} /> Refresh
                   </Button>
                 </div>
-
-                {/* Aggregate strip */}
                 {works.length > 0 && (
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <StatMini label="Total Works"     value={works.length}                         icon={BookMarked} color="text-primary"    bg="bg-primary/10" />
@@ -638,7 +626,6 @@ export default function AuthorDashboard() {
                     <StatMini label="Avg Rating"      value={avgRating}                            icon={Star}       color="text-amber-600"  bg="bg-amber-50"   />
                   </div>
                 )}
-
                 {worksLoading ? (
                   <div className="flex justify-center py-16">
                     <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
@@ -646,7 +633,7 @@ export default function AuthorDashboard() {
                 ) : works.length === 0 ? (
                   <Card className="p-12 text-center shadow-soft">
                     <Activity className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                    <p className="text-muted-foreground mb-4">No content yet. Upload or submit a manuscript to see performance data.</p>
+                    <p className="text-muted-foreground mb-4">No content yet.</p>
                     <Button onClick={() => navigate('/upload')} className="gap-2">
                       <Plus className="h-4 w-4" /> Upload Content
                     </Button>
@@ -685,7 +672,7 @@ export default function AuthorDashboard() {
                                     <div className="font-medium text-sm truncate max-w-[180px]">{work.title}</div>
                                     {work.author && <div className="text-xs text-muted-foreground truncate max-w-[180px]">{work.author}</div>}
                                   </div>
-                                  {work.is_featured  && <Flame className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" title="Featured"   />}
+                                  {work.is_featured   && <Flame className="h-3.5 w-3.5 text-orange-500 flex-shrink-0" title="Featured"   />}
                                   {work.is_bestseller && <Award className="h-3.5 w-3.5 text-amber-500  flex-shrink-0" title="Bestseller" />}
                                 </div>
                               </td>
@@ -693,55 +680,33 @@ export default function AuthorDashboard() {
                                 <span className="text-xs capitalize bg-muted px-2 py-0.5 rounded text-muted-foreground">{work.content_type}</span>
                               </td>
                               <td className="px-4 py-3">
-                                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                                  CONTENT_STATUS_COLORS[work.status] || 'bg-gray-100 text-gray-600 border-gray-200'
-                                }`}>
+                                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${CONTENT_STATUS_COLORS[work.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                   {work.status?.replace('_', ' ')}
                                 </span>
                               </td>
-                              <td className="px-4 py-3 text-right text-sm font-medium tabular-nums">
-                                {(work.view_count || 0).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 text-right text-sm font-medium tabular-nums">
-                                {(work.total_downloads || 0).toLocaleString()}
-                              </td>
-                              <td className="px-4 py-3 text-right text-sm text-muted-foreground tabular-nums">
-                                {(work.total_reviews || 0).toLocaleString()}
-                              </td>
+                              <td className="px-4 py-3 text-right text-sm font-medium tabular-nums">{(work.view_count || 0).toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right text-sm font-medium tabular-nums">{(work.total_downloads || 0).toLocaleString()}</td>
+                              <td className="px-4 py-3 text-right text-sm text-muted-foreground tabular-nums">{(work.total_reviews || 0).toLocaleString()}</td>
                               <td className="px-4 py-3 text-right">
                                 {parseFloat(work.average_rating || '0') > 0 ? (
                                   <span className="flex items-center justify-end gap-1 text-amber-600 text-sm font-medium">
                                     <Star className="h-3 w-3 fill-amber-400" />
                                     {parseFloat(work.average_rating).toFixed(1)}
                                   </span>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
+                                ) : <span className="text-xs text-muted-foreground">—</span>}
                               </td>
                               <td className="px-4 py-3 text-right text-sm font-medium">
-                                {work.is_free
-                                  ? <span className="text-green-600 text-xs">Free</span>
-                                  : `KES ${parseFloat(work.price || '0').toLocaleString()}`
-                                }
+                                {work.is_free ? <span className="text-green-600 text-xs">Free</span> : `KES ${parseFloat(work.price || '0').toLocaleString()}`}
                               </td>
                               <td className="px-4 py-3 text-xs text-muted-foreground">
-                                {work.published_at
-                                  ? new Date(work.published_at).toLocaleDateString()
-                                  : <span className="italic opacity-60">
-                                      {work.status === 'draft' ? 'Draft' : 'Not published'}
-                                    </span>
-                                }
+                                {work.published_at ? new Date(work.published_at).toLocaleDateString() : <span className="italic opacity-60">{work.status === 'draft' ? 'Draft' : 'Not published'}</span>}
                               </td>
                               <td className="px-4 py-3">
                                 <div className="flex gap-0.5">
                                   <button onClick={() => navigate(`/content/${work.id}`)}
-                                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="View">
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </button>
+                                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors"><Eye className="h-3.5 w-3.5" /></button>
                                   <button onClick={() => navigate(`/content/update/${work.id}`)}
-                                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors" title="Edit">
-                                    <Edit3 className="h-3.5 w-3.5" />
-                                  </button>
+                                    className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-colors"><Edit3 className="h-3.5 w-3.5" /></button>
                                 </div>
                               </td>
                             </tr>
@@ -752,6 +717,11 @@ export default function AuthorDashboard() {
                   </Card>
                 )}
               </div>
+            </TabsContent>
+
+            {/* ═══════════════════════════ WALLET TAB ═══════════════════════ */}
+            <TabsContent value="wallet">
+              {userId && <AuthorWallet userId={userId} />}
             </TabsContent>
 
             {/* ══════════════════════ SUBMISSIONS TAB ═══════════════════════ */}
@@ -823,13 +793,6 @@ export default function AuthorDashboard() {
                             <span>Submitted {new Date(sub.created_at).toLocaleDateString()}</span>
                             {sub.reviewed_at && <span>Reviewed {new Date(sub.reviewed_at).toLocaleDateString()}</span>}
                           </div>
-                          {sub.keywords?.length > 0 && (
-                            <div className="flex gap-1 flex-wrap mt-2">
-                              {sub.keywords.map((k: string) => (
-                                <span key={k} className="text-[11px] bg-primary/8 border border-primary/15 px-2 py-0.5 rounded-full text-primary/70">{k}</span>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                       <div className="flex flex-col gap-2 flex-shrink-0">
@@ -899,9 +862,7 @@ export default function AuthorDashboard() {
                     </div>
                   </div>
                   {!worksLoading && (
-                    <p className="text-xs text-muted-foreground mt-3">
-                      Showing {filteredWorks.length} of {works.length} works
-                    </p>
+                    <p className="text-xs text-muted-foreground mt-3">Showing {filteredWorks.length} of {works.length} works</p>
                   )}
                 </Card>
 
@@ -916,9 +877,7 @@ export default function AuthorDashboard() {
                       {worksSearch || worksStatusFilter !== 'all' ? 'No works match your filters.' : 'No content uploaded yet.'}
                     </p>
                     {!worksSearch && worksStatusFilter === 'all' && (
-                      <Button onClick={() => navigate('/upload')} className="gap-2">
-                        <Plus className="h-4 w-4" /> Upload Content
-                      </Button>
+                      <Button onClick={() => navigate('/upload')} className="gap-2"><Plus className="h-4 w-4" /> Upload Content</Button>
                     )}
                   </Card>
                 ) : (
@@ -936,22 +895,16 @@ export default function AuthorDashboard() {
                             </div>
                           )}
                           <div className="absolute top-2 left-2">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
-                              CONTENT_STATUS_COLORS[work.status] || 'bg-gray-100 text-gray-600 border-gray-200'
-                            }`}>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${CONTENT_STATUS_COLORS[work.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                               {work.status?.replace('_', ' ')}
                             </span>
                           </div>
                           <div className="absolute inset-0 bg-black/72 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
                             <div className="flex gap-2">
                               <button onClick={() => navigate(`/content/${work.id}`)}
-                                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="View">
-                                <Eye className="h-4 w-4" />
-                              </button>
+                                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors"><Eye className="h-4 w-4" /></button>
                               <button onClick={() => navigate(`/content/update/${work.id}`)}
-                                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors" title="Edit">
-                                <Edit3 className="h-4 w-4" />
-                              </button>
+                                className="p-2 bg-white/15 hover:bg-white/30 rounded-lg text-white transition-colors"><Edit3 className="h-4 w-4" /></button>
                             </div>
                           </div>
                         </div>
@@ -961,10 +914,7 @@ export default function AuthorDashboard() {
                           <div className="flex items-center justify-between mt-2">
                             <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded capitalize">{work.content_type}</span>
                             <span className="text-sm font-semibold">
-                              {work.is_free
-                                ? <span className="text-green-600 text-xs font-medium">Free</span>
-                                : `KES ${parseFloat(work.price || '0').toLocaleString()}`
-                              }
+                              {work.is_free ? <span className="text-green-600 text-xs font-medium">Free</span> : `KES ${parseFloat(work.price || '0').toLocaleString()}`}
                             </span>
                           </div>
                           <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground">
@@ -995,7 +945,6 @@ export default function AuthorDashboard() {
                     <RefreshCw className={`h-4 w-4 ${ordersLoading ? 'animate-spin' : ''}`} /> Refresh
                   </Button>
                 </div>
-
                 {ordersLoading ? (
                   <div className="flex justify-center py-16">
                     <div className="h-8 w-8 rounded-full border-4 border-primary border-t-transparent animate-spin" />
@@ -1011,12 +960,8 @@ export default function AuthorDashboard() {
                     {orders.map(order => {
                       const isExpanded = expandedOrder === order.id;
                       const isUnpaid   = order.payment_status !== 'paid' && order.status !== 'cancelled';
-
                       return (
-                        <Card key={order.id}
-                          className={`shadow-soft overflow-hidden transition-all ${isUnpaid ? 'ring-2 ring-orange-200' : ''}`}>
-
-                          {/* ── Unpaid CTA strip ── */}
+                        <Card key={order.id} className={`shadow-soft overflow-hidden transition-all ${isUnpaid ? 'ring-2 ring-orange-200' : ''}`}>
                           {isUnpaid && (
                             <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-b border-orange-200 px-5 py-3 flex items-center gap-3 flex-wrap">
                               <div className="flex items-center gap-2.5 flex-1 min-w-0">
@@ -1028,79 +973,48 @@ export default function AuthorDashboard() {
                                   <p className="text-xs text-orange-700/80">Complete your purchase to access your items</p>
                                 </div>
                               </div>
-                              <Button
-                                size="sm"
+                              <Button size="sm"
                                 className="bg-orange-600 hover:bg-orange-700 text-white gap-2 flex-shrink-0 shadow-sm font-semibold"
-                                onClick={() => goToCheckout(order)}
-                              >
+                                onClick={() => goToCheckout(order)}>
                                 <CreditCard className="h-3.5 w-3.5" />
                                 Pay KES {parseFloat(order.total_price || '0').toLocaleString()}
                                 <ArrowRight className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           )}
-
                           <div className="p-5">
                             <div className="flex items-start justify-between gap-4 flex-wrap">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap mb-1">
                                   <span className="font-mono font-semibold text-sm text-foreground">#{order.order_number}</span>
-                                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                                    ORDER_STATUS_COLORS[order.status] || 'bg-gray-50 text-gray-600 border-gray-200'
-                                  }`}>
-                                    {order.status}
-                                  </span>
+                                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ORDER_STATUS_COLORS[order.status] || 'bg-gray-50 text-gray-600 border-gray-200'}`}>{order.status}</span>
                                   <span className={`text-xs font-medium ${PAYMENT_STATUS_COLORS[order.payment_status] || 'text-muted-foreground'}`}>
                                     {order.payment_status === 'paid' && '✓ '}{order.payment_status}
                                   </span>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                  {new Date(order.created_at).toLocaleDateString('en-KE', {
-                                    year: 'numeric', month: 'short', day: 'numeric',
-                                    hour: '2-digit', minute: '2-digit',
-                                  })}
+                                  {new Date(order.created_at).toLocaleDateString('en-KE', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                   {order.payment_method && <span className="ml-2 capitalize">· {order.payment_method}</span>}
                                 </p>
                               </div>
                               <div className="text-right flex-shrink-0">
-                                <div className="text-lg font-bold text-foreground">
-                                  KES {parseFloat(order.total_price || '0').toLocaleString()}
-                                </div>
-                                {(parseFloat(order.discount || '0') > 0 || parseFloat(order.tax || '0') > 0) && (
-                                  <div className="text-xs text-muted-foreground space-x-2">
-                                    {parseFloat(order.discount || '0') > 0 && <span>Disc: −{parseFloat(order.discount).toLocaleString()}</span>}
-                                    {parseFloat(order.tax || '0')      > 0 && <span>Tax: +{parseFloat(order.tax).toLocaleString()}</span>}
-                                  </div>
-                                )}
+                                <div className="text-lg font-bold text-foreground">KES {parseFloat(order.total_price || '0').toLocaleString()}</div>
                                 <div className="text-[10px] text-muted-foreground">{order.currency || 'KES'}</div>
                               </div>
                             </div>
-
-                            {/* Expand toggle */}
                             <div className="flex items-center justify-end mt-3 pt-3 border-t">
                               <button
-                                onClick={() => {
-                                  const next = isExpanded ? null : order.id;
-                                  setExpandedOrder(next);
-                                  if (next) loadOrderItems(order.id);
-                                }}
-                                className="text-xs text-primary hover:underline flex items-center gap-1"
-                              >
-                                {isExpanded
-                                  ? <><ChevronUp   className="h-3 w-3" /> Hide items</>
-                                  : <><ChevronDown className="h-3 w-3" /> View items</>
-                                }
+                                onClick={() => { const next = isExpanded ? null : order.id; setExpandedOrder(next); if (next) loadOrderItems(order.id); }}
+                                className="text-xs text-primary hover:underline flex items-center gap-1">
+                                {isExpanded ? <><ChevronUp className="h-3 w-3" /> Hide items</> : <><ChevronDown className="h-3 w-3" /> View items</>}
                               </button>
                             </div>
                           </div>
-
-                          {/* Expanded items */}
                           {isExpanded && (
                             <div className="border-t bg-muted/20 p-4">
                               {!orderItemsMap[order.id] ? (
                                 <div className="flex items-center gap-2 text-xs text-muted-foreground py-2">
-                                  <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                                  Loading items…
+                                  <div className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />Loading items…
                                 </div>
                               ) : orderItemsMap[order.id].length === 0 ? (
                                 <p className="text-xs text-muted-foreground">No items found.</p>
@@ -1109,8 +1023,7 @@ export default function AuthorDashboard() {
                                   {orderItemsMap[order.id].map((item: any) => (
                                     <div key={item.id} className="flex items-center gap-3 bg-background rounded-lg p-2.5 border">
                                       {item.content?.cover_image_url ? (
-                                        <img src={item.content.cover_image_url} alt=""
-                                          className="h-10 w-8 object-cover rounded border flex-shrink-0" />
+                                        <img src={item.content.cover_image_url} alt="" className="h-10 w-8 object-cover rounded border flex-shrink-0" />
                                       ) : (
                                         <div className="h-10 w-8 bg-muted rounded border flex items-center justify-center flex-shrink-0">
                                           <BookOpen className="h-3 w-3 text-muted-foreground" />
@@ -1143,13 +1056,6 @@ export default function AuthorDashboard() {
                                   ))}
                                 </div>
                               )}
-
-                              <div className="flex flex-wrap gap-4 pt-3 border-t mt-3 text-xs text-muted-foreground">
-                                {order.paid_at      && <span><span className="font-medium text-foreground">Paid: </span>{new Date(order.paid_at).toLocaleString()}</span>}
-                                {order.completed_at && <span><span className="font-medium text-foreground">Completed: </span>{new Date(order.completed_at).toLocaleString()}</span>}
-                                {order.cancelled_at && <span><span className="font-medium text-foreground">Cancelled: </span>{new Date(order.cancelled_at).toLocaleString()}</span>}
-                                {order.shipping_address && <span><span className="font-medium text-foreground">Ship to: </span>{order.shipping_address}</span>}
-                              </div>
                             </div>
                           )}
                         </Card>
@@ -1165,13 +1071,11 @@ export default function AuthorDashboard() {
               <div className="max-w-2xl space-y-6">
                 <Card className="p-6 shadow-soft">
                   <h2 className="font-forum text-xl mb-6">Edit Profile</h2>
-
                   <div className="mb-6">
                     <label className="text-sm font-medium mb-2 block">Profile Picture</label>
                     <div className="flex items-center gap-4">
                       {(avatarPreview || avatarUrl) ? (
-                        <img src={avatarPreview || avatarUrl} alt=""
-                          className="h-20 w-20 rounded-full object-cover border-2 border-primary/20" />
+                        <img src={avatarPreview || avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover border-2 border-primary/20" />
                       ) : (
                         <div className="h-20 w-20 rounded-full bg-accent flex items-center justify-center font-forum text-3xl text-primary">
                           {(profile?.full_name || 'A')[0].toUpperCase()}
@@ -1186,7 +1090,6 @@ export default function AuthorDashboard() {
                       </div>
                     </div>
                   </div>
-
                   <div className="space-y-4">
                     <div className="space-y-1">
                       <label className="text-sm font-medium">Email</label>
@@ -1222,9 +1125,7 @@ export default function AuthorDashboard() {
                       <p className="text-xs text-muted-foreground">Role is assigned by admin.</p>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-sm font-medium">
-                        Bio <span className="text-muted-foreground font-normal">({bio.length}/{MAX_BIO})</span>
-                      </label>
+                      <label className="text-sm font-medium">Bio <span className="text-muted-foreground font-normal">({bio.length}/{MAX_BIO})</span></label>
                       <Textarea value={bio} onChange={e => setBio(e.target.value)} maxLength={MAX_BIO} rows={4} placeholder="Tell readers about yourself…" disabled={saving} />
                     </div>
                     <div className="flex gap-4 items-center flex-wrap pt-2">

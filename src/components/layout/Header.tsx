@@ -49,16 +49,22 @@ function getRoleMenuItems(role: string | null) {
   ];
 }
 
-// ── Hook: live cart count fetched from DB ─────────────────────────────────────
+// ── Improved Live Cart Count Hook ─────────────────────────────────────────────
 function useCartCount(userId: string | null) {
   const [count, setCount] = useState(0);
 
   const fetchCount = useCallback(async () => {
-    if (!userId) { setCount(0); return; }
+    if (!userId) {
+      setCount(0);
+      return;
+    }
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setCount(0); return; }
+      if (!session) {
+        setCount(0);
+        return;
+      }
 
       const res = await fetch(`${SUPABASE_URL}/functions/v1/cart-get`, {
         method: 'GET',
@@ -68,26 +74,31 @@ function useCartCount(userId: string | null) {
         },
       });
 
-      if (!res.ok) { setCount(0); return; }
+      if (!res.ok) {
+        setCount(0);
+        return;
+      }
 
       const data = await res.json();
-      // summary.item_count is the number of distinct line items;
-      // sum quantities for the actual total item count shown on badge
+      
+      // Calculate total quantity (not just number of line items)
       const total = (data.items ?? []).reduce(
-        (sum: number, item: any) => sum + (item.quantity ?? 1), 0
+        (sum: number, item: any) => sum + (item.quantity ?? 1), 
+        0
       );
       setCount(total);
-    } catch {
+    } catch (err) {
+      console.error('Failed to fetch cart count:', err);
       setCount(0);
     }
   }, [userId]);
 
-  // Fetch on mount and whenever userId changes (login / logout / refresh)
+  // Fetch when userId changes (login, logout, etc.)
   useEffect(() => {
     fetchCount();
   }, [fetchCount]);
 
-  // Realtime: re-fetch when cart_items table changes for this user's cart
+  // Realtime subscription to cart_items table changes
   useEffect(() => {
     if (!userId) return;
 
@@ -95,15 +106,34 @@ function useCartCount(userId: string | null) {
       .channel(`cart-count-${userId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'cart_items' },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'cart_items' 
+        },
         () => fetchCount()
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId, fetchCount]);
 
-  // Re-fetch when tab regains focus (user may have added items in another tab)
+  // Listen for custom 'cart-updated' event (instant update after add-to-cart via Edge Function)
+  useEffect(() => {
+    const handleCartUpdated = () => {
+      fetchCount();
+    };
+
+    window.addEventListener('cart-updated', handleCartUpdated);
+
+    return () => {
+      window.removeEventListener('cart-updated', handleCartUpdated);
+    };
+  }, [fetchCount]);
+
+  // Refresh when tab regains focus
   useEffect(() => {
     const onFocus = () => fetchCount();
     window.addEventListener('focus', onFocus);
@@ -113,10 +143,10 @@ function useCartCount(userId: string | null) {
   return { count, refresh: fetchCount };
 }
 
-// ── Notification Bell ─────────────────────────────────────────────────────────
+// ── Notification Bell Component ───────────────────────────────────────────────
 function NotificationBell({ userId }: { userId: string }) {
-  const [count,  setCount]  = useState(0);
-  const [open,   setOpen]   = useState(false);
+  const [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false);
   const [notifs, setNotifs] = useState<any[]>([]);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -124,11 +154,18 @@ function NotificationBell({ userId }: { userId: string }) {
     fetchUnread();
     const channel = supabase
       .channel('notif-bell')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+      .on(
+        'postgres_changes',
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `user_id=eq.${userId}` 
+        },
         () => fetchUnread()
       )
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
 
@@ -148,6 +185,7 @@ function NotificationBell({ userId }: { userId: string }) {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(8);
+    
     setNotifs(data || []);
     setCount((data || []).filter((n: any) => !n.read).length);
   };
@@ -158,6 +196,7 @@ function NotificationBell({ userId }: { userId: string }) {
       .update({ read: true, read_at: new Date().toISOString() })
       .eq('user_id', userId)
       .eq('read', false);
+    
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
     setCount(0);
   };
@@ -217,9 +256,7 @@ function NotificationBell({ userId }: { userId: string }) {
   );
 }
 
-// ── User Dropdown ─────────────────────────────────────────────────────────────
-// Uses a single UserCircle2 icon (person) for all roles — no role-specific icons
-// on the trigger button itself.
+// ── User Dropdown Component ───────────────────────────────────────────────────
 function UserDropdown({
   isMobile,
   onNavigate,
@@ -228,8 +265,8 @@ function UserDropdown({
   onNavigate?: () => void;
 }) {
   const { role, userId, loading } = useRole();
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -249,7 +286,6 @@ function UserDropdown({
     navigate('/auth');
   };
 
-  // ── Not logged in ──
   if (!loading && !userId) {
     if (isMobile) {
       return (
@@ -277,7 +313,6 @@ function UserDropdown({
 
   const menuItems = getRoleMenuItems(role);
 
-  // ── Mobile layout ──
   if (isMobile) {
     return (
       <div className="space-y-1">
@@ -292,7 +327,6 @@ function UserDropdown({
                 : 'text-foreground'
             }`}
           >
-            {/* No icon rendered — label only for clean mobile list */}
             {item.label}
           </Link>
         ))}
@@ -306,8 +340,6 @@ function UserDropdown({
     );
   }
 
-  // ── Desktop dropdown ──
-  // Trigger: single person icon (UserCircle2) + chevron — no role-specific icons
   return (
     <div className="relative" ref={ref}>
       <button
@@ -325,7 +357,6 @@ function UserDropdown({
 
       {open && (
         <div className="absolute right-0 mt-2 w-52 rounded-xl border border-border bg-background shadow-elevated z-50 overflow-hidden">
-          {/* Role header */}
           <div className="px-4 py-3 border-b bg-muted/30">
             <p className="text-xs text-muted-foreground">Signed in as</p>
             <p className="text-xs font-semibold capitalize mt-0.5 text-foreground">
@@ -333,7 +364,6 @@ function UserDropdown({
             </p>
           </div>
 
-          {/* Menu items — no icons, clean text list */}
           <div className="py-1">
             {menuItems.map(item => (
               <Link
@@ -365,23 +395,23 @@ function UserDropdown({
   );
 }
 
-// ── Main Header ───────────────────────────────────────────────────────────────
+// ── Main Header Component ─────────────────────────────────────────────────────
 export const Header = () => {
-  const [isSearchOpen,     setIsSearchOpen]     = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [searchQuery,      setSearchQuery]      = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
   const location = useLocation();
   const navigate = useNavigate();
   const { userId, role } = useRole();
 
-  // ── DB-backed cart count — persists across refreshes ──
+  // Live cart count with instant updates
   const { count: itemCount } = useCartCount(userId);
 
-  // Re-fetch cart on auth state change (login / token refresh)
+  // Auth state listener (safety net)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
-      // useCartCount's own useEffect handles this via userId dep,
-      // but an explicit focus-refresh is also wired inside the hook.
+      // useCartCount already handles userId changes
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -399,7 +429,7 @@ export const Header = () => {
     <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="container flex h-16 items-center justify-between md:h-20">
 
-        {/* ── Logo ── */}
+        {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group shrink-0">
           <img
             src={intercenLogo}
@@ -408,7 +438,7 @@ export const Header = () => {
           />
         </Link>
 
-        {/* ── Desktop Nav ── */}
+        {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center gap-8">
           {navLinks.map(link => (
             <Link
@@ -433,10 +463,10 @@ export const Header = () => {
           )}
         </nav>
 
-        {/* ── Desktop Actions ── */}
+        {/* Desktop Actions */}
         <div className="flex items-center gap-1 md:gap-2">
 
-          {/* Search toggle */}
+          {/* Search Toggle */}
           <Button
             variant="ghost"
             size="icon"
@@ -447,31 +477,31 @@ export const Header = () => {
             <Search className="h-5 w-5" />
           </Button>
 
-          {/* Notifications — logged in only */}
+          {/* Notifications */}
           {userId && (
             <div className="hidden lg:flex">
               <NotificationBell userId={userId} />
             </div>
           )}
 
-          {/* Cart icon with live badge ── always shows DB count */}
+          {/* Cart Icon - Now instantly updates on add to cart */}
           <Link to="/cart" aria-label={`Shopping cart, ${itemCount} items`}>
             <Button variant="ghost" size="icon" className="relative">
               <ShoppingCart className="h-5 w-5" />
               {itemCount > 0 && (
-                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-secondary text-secondary-foreground">
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-primary text-primary-foreground font-medium">
                   {itemCount > 99 ? '99+' : itemCount}
                 </Badge>
               )}
             </Button>
           </Link>
 
-          {/* User dropdown — desktop — single person icon trigger */}
+          {/* User Dropdown */}
           <div className="hidden lg:flex">
             <UserDropdown />
           </div>
 
-          {/* Mobile menu toggle */}
+          {/* Mobile Menu */}
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Open menu">
@@ -490,7 +520,7 @@ export const Header = () => {
               </div>
 
               <div className="flex flex-col p-6 gap-6 overflow-y-auto max-h-[calc(100vh-88px)]">
-                {/* Nav links */}
+                {/* Navigation */}
                 <div>
                   <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                     Navigation
@@ -541,7 +571,7 @@ export const Header = () => {
                   </form>
                 </div>
 
-                {/* Cart */}
+                {/* Cart in Mobile Menu */}
                 <div>
                   <p className="px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                     Cart
@@ -554,7 +584,7 @@ export const Header = () => {
                     <ShoppingCart className="h-5 w-5" />
                     My Cart
                     {itemCount > 0 && (
-                      <Badge className="ml-auto bg-secondary text-secondary-foreground">
+                      <Badge className="ml-auto bg-primary text-primary-foreground">
                         {itemCount > 99 ? '99+' : itemCount}
                       </Badge>
                     )}
@@ -574,7 +604,7 @@ export const Header = () => {
         </div>
       </div>
 
-      {/* ── Expandable Search Bar ── */}
+      {/* Expandable Search Bar */}
       {isSearchOpen && (
         <div className="border-t border-border/50 bg-muted/30 py-4 animate-fade-in">
           <div className="container">

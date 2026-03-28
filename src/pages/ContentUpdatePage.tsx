@@ -19,37 +19,31 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Loader2, Upload, FileText, Image as ImageIcon, History } from 'lucide-react';
+import { Loader2, Upload, FileText, Image as ImageIcon, History, RefreshCw } from 'lucide-react';
 import { ContentDeleteButton } from '@/components/contents/ContentDeleteButton';
 
-const MAX_COVER_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_COVER_SIZE    = 10 * 1024 * 1024; // 10 MB
+const MAX_BACKPAGE_SIZE = 10 * 1024 * 1024;
 
 const CONTENT_TYPES = [
-  'book',
-  'ebook',
-  'document',
-  'paper',
-  'report',
-  'manual',
-  'guide',
-  'manuscript',
-  'article',
-  'thesis',
-  'dissertation',
+  'book', 'ebook', 'document', 'paper', 'report',
+  'manual', 'guide', 'manuscript', 'article', 'thesis', 'dissertation',
 ] as const;
 
 const VISIBILITY_OPTIONS = [
-  { value: 'private', label: 'Private' },
+  { value: 'private',      label: 'Private' },
   { value: 'organization', label: 'Organization Only' },
-  { value: 'restricted', label: 'Restricted' },
-  { value: 'public', label: 'Public' },
+  { value: 'restricted',   label: 'Restricted' },
+  { value: 'public',       label: 'Public' },
 ];
 
+// FIX: 'published' was missing — causes the Status select to render blank
+// for any content that was published via the publication-publish edge function.
 const STATUS_OPTIONS = [
-  { value: 'draft', label: 'Draft' },
+  { value: 'draft',          label: 'Draft' },
   { value: 'pending_review', label: 'Pending Review' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'published',      label: 'Published' },     // ← was missing
+  { value: 'archived',       label: 'Archived' },
 ];
 
 interface VersionHistory {
@@ -67,56 +61,70 @@ interface Category {
   name: string;
 }
 
+interface FormState {
+  title: string;
+  subtitle: string;
+  author: string;
+  publisher: string;
+  description: string;
+  price: string;
+  isbn: string;
+  language: string;
+  visibility: string;
+  status: string;
+  contentType: string;
+  category_id: string;
+  version: string;
+  page_count: string;
+  stock_quantity: string;
+  is_featured: boolean;
+  is_for_sale: boolean;
+  is_free: boolean;
+  tags: string;
+  cover: File | null;
+  backpage: File | null;
+  currentFileUrl: string;
+  currentCoverUrl: string;
+  currentBackpageUrl: string;
+}
+
+const EMPTY_FORM: FormState = {
+  title: '', subtitle: '', author: '', publisher: '', description: '',
+  price: '', isbn: '', language: 'en',
+  visibility: 'private', status: 'draft',
+  contentType: '', category_id: '',
+  version: '1.0', page_count: '', stock_quantity: '',
+  is_featured: false, is_for_sale: false, is_free: false,
+  tags: '',
+  cover: null, backpage: null,
+  currentFileUrl: '', currentCoverUrl: '', currentBackpageUrl: '',
+};
+
 export default function ContentUpdatePage() {
-  const { id } = useParams<{ id: string }>();
+  const { id }   = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
-  const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const [versionHistory, setVersionHistory] = useState<VersionHistory[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading,             setLoading]             = useState(true);
+  const [updating,            setUpdating]            = useState(false);
+  const [showVersionHistory,  setShowVersionHistory]  = useState(false);
+  const [versionHistory,      setVersionHistory]      = useState<VersionHistory[]>([]);
+  const [categories,          setCategories]          = useState<Category[]>([]);
+  // refreshKey increments after every successful update to force loadContent to re-run
+  const [refreshKey,          setRefreshKey]          = useState(0);
+  const [form,                setForm]                = useState<FormState>(EMPTY_FORM);
 
-  const coverInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef    = useRef<HTMLInputElement>(null);
   const backpageInputRef = useRef<HTMLInputElement>(null);
 
-  const [form, setForm] = useState({
-    title: '',
-    subtitle: '',
-    author: '',
-    publisher: '',
-    description: '',
-    price: '',
-    isbn: '',
-    language: 'en',
-    visibility: 'private' as (typeof VISIBILITY_OPTIONS)[number]['value'],
-    status: 'draft' as (typeof STATUS_OPTIONS)[number]['value'],
-    contentType: '' as (typeof CONTENT_TYPES)[number],
-    category_id: '',
-    version: '1.0',
-    page_count: '',
-    stock_quantity: '',
-    is_featured: false,
-    is_for_sale: false,
-    tags: '',
-    cover: null as File | null,
-    backpage: null as File | null,
-    currentFileUrl: '',
-    currentCoverUrl: '',
-    currentBackpageUrl: '',
-  });
-
-  // Check if ebook content type is selected
   const isEbookType = form.contentType === 'ebook';
 
-  // ───────────────────────────────────────────────
-  // Load data on mount
-  // ───────────────────────────────────────────────
+  // ── Load on mount and after successful updates ────────────────────────────
   useEffect(() => {
     if (!id) return;
     loadContent();
     loadCategories();
-  }, [id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, refreshKey]);
 
   useEffect(() => {
     if (!loading) window.scrollTo({ top: 0, behavior: 'auto' });
@@ -125,10 +133,7 @@ export default function ContentUpdatePage() {
   const loadCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('categories')
-        .select('id, name')
-        .order('name');
-
+        .from('categories').select('id, name').order('name');
       if (error) throw error;
       setCategories(data || []);
     } catch (err: any) {
@@ -154,29 +159,48 @@ export default function ContentUpdatePage() {
         return;
       }
 
+      // FIX: if status comes back as 'published' but STATUS_OPTIONS didn't
+      // include it, the Select would show blank. It now includes 'published'.
+      // We also fall back gracefully if status is an unexpected value.
+      const knownStatuses = STATUS_OPTIONS.map(s => s.value);
+      const safeStatus    = knownStatuses.includes(data.status) ? data.status : 'draft';
+
+      const knownVisibilities = VISIBILITY_OPTIONS.map(v => v.value);
+      const safeVisibility    = knownVisibilities.includes(data.visibility) ? data.visibility : 'private';
+
+      // Tags: try both a flat array column and a join (we handle null gracefully)
+      let tagsString = '';
+      if (Array.isArray(data.tags)) {
+        tagsString = data.tags.join(', ');
+      } else if (Array.isArray(data.meta_keywords)) {
+        // publications-publish stores keywords in meta_keywords
+        tagsString = data.meta_keywords.join(', ');
+      }
+
       setForm({
-        title: data.title || '',
-        subtitle: data.subtitle || '',
-        author: data.author || '',
-        publisher: data.publisher || '',
-        description: data.description || '',
-        price: data.price?.toString() || '',
-        isbn: data.isbn || '',
-        language: data.language || 'en',
-        visibility: data.visibility || 'private',
-        status: data.status || 'draft',
-        contentType: data.content_type || 'book',
-        category_id: data.category_id || '',
-        version: data.version || '1.0',
-        page_count: data.page_count?.toString() || '',
-        stock_quantity: data.stock_quantity?.toString() || '',
-        is_featured: !!data.is_featured,
-        is_for_sale: !!data.is_for_sale,
-        tags: data.tags?.join(', ') || '',
-        cover: null,
-        backpage: null,
-        currentFileUrl: data.file_url || '',
-        currentCoverUrl: data.cover_image_url || '',
+        title:            data.title           || '',
+        subtitle:         data.subtitle        || '',
+        author:           data.author          || '',
+        publisher:        data.publisher       || '',
+        description:      data.description     || '',
+        price:            data.price?.toString()        || '',
+        isbn:             data.isbn            || '',
+        language:         data.language        || 'en',
+        visibility:       safeVisibility,
+        status:           safeStatus,
+        contentType:      data.content_type    || '',
+        category_id:      data.category_id     || '',
+        version:          data.version         || '1.0',
+        page_count:       data.page_count?.toString()   || '',
+        stock_quantity:   data.stock_quantity?.toString() || '',
+        is_featured:      !!data.is_featured,
+        is_for_sale:      !!data.is_for_sale,
+        is_free:          !!data.is_free,
+        tags:             tagsString,
+        cover:            null,
+        backpage:         null,
+        currentFileUrl:   data.file_url          || '',
+        currentCoverUrl:  data.cover_image_url   || '',
         currentBackpageUrl: data.backpage_image_url || '',
       });
     } catch (err: any) {
@@ -191,7 +215,6 @@ export default function ContentUpdatePage() {
     try {
       const { data, error } = await supabase
         .rpc('get_content_version_history', { p_content_id: id });
-
       if (error) throw error;
       setVersionHistory(data || []);
       setShowVersionHistory(true);
@@ -201,86 +224,40 @@ export default function ContentUpdatePage() {
     }
   };
 
-  // ───────────────────────────────────────────────
-  // File change handler
-  // ───────────────────────────────────────────────
+  // ── File handlers ─────────────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, files } = e.target;
     if (!files?.[0]) return;
-
     const file = files[0];
-
-    if (name === 'cover_image' && file.size > MAX_COVER_SIZE) {
-      toast.error('Cover image must be under 10MB');
-      e.target.value = '';
-      return;
-    }
-    if (name === 'backpage_image' && file.size > MAX_BACKPAGE_SIZE) {
-      toast.error('Backpage image must be under 10MB');
-      e.target.value = '';
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      [name === 'cover_image' ? 'cover' : 'backpage']: file,
-    }));
+    if (name === 'cover_image'   && file.size > MAX_COVER_SIZE)    { toast.error('Cover image must be under 10MB');    e.target.value = ''; return; }
+    if (name === 'backpage_image' && file.size > MAX_BACKPAGE_SIZE) { toast.error('Backpage image must be under 10MB'); e.target.value = ''; return; }
+    setForm(prev => ({ ...prev, [name === 'cover_image' ? 'cover' : 'backpage']: file }));
   };
 
-  // ───────────────────────────────────────────────
-  // Form change handlers (full update on submit)
-  // ───────────────────────────────────────────────
+  // ── Form change helpers ───────────────────────────────────────────────────
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSelectChange = (name: string, value: string) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleCheckboxChange = (name: string, checked: boolean) => {
-    setForm((prev) => ({ ...prev, [name]: checked }));
-  };
-
-  // ───────────────────────────────────────────────
-  // Partial / auto-save logic (debounced)
-  // ───────────────────────────────────────────────
+  // ── Partial / auto-save (debounced) ───────────────────────────────────────
   const partialUpdate = async (updates: Record<string, any>) => {
     try {
-      // Force get fresh session (triggers refresh if needed)
       const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-
-      if (sessionErr) {
-        console.error('getSession failed:', sessionErr);
-        toast.error('Authentication error — please sign in again');
-        return;
-      }
-
-      if (!session?.access_token) {
-        console.error('No active session / token');
+      if (sessionErr || !session?.access_token) {
         toast.error('You appear to be logged out. Please sign in.');
         return;
       }
 
-      console.log('Partial update → session user:', session.user?.id || 'unknown');
-      console.log('Token prefix:', session.access_token.substring(0, 10) + '...');
-
-      const payload = {
-        content_id: id!,
-        ...updates,
-      };
-
       const { data, error } = await supabase.functions.invoke('content-part-update', {
-        body: payload,
-        // No need to set Authorization — SDK does it
+        body: { content_id: id!, ...updates },
       });
 
-      if (error) {
-        console.error('Invoke error:', error);
-        throw error;
-      }
-
+      if (error) throw error;
       console.log('Partial update OK:', data);
     } catch (err: any) {
       console.error('Partial update crashed:', err);
@@ -292,98 +269,83 @@ export default function ContentUpdatePage() {
 
   const handlePartialTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-
+    setForm(prev => ({ ...prev, [name]: value }));
     if (['stock_quantity', 'price', 'page_count'].includes(name)) {
       debouncedPartialUpdate({ [name]: value || '0' });
     }
   };
 
   const handlePartialSelect = (name: string, value: string) => {
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm(prev => ({ ...prev, [name]: value }));
     debouncedPartialUpdate({ [name]: value });
   };
 
   const handlePartialCheckbox = (name: string, checked: boolean) => {
-    setForm((prev) => ({ ...prev, [name]: checked }));
+    setForm(prev => ({ ...prev, [name]: checked }));
     debouncedPartialUpdate({ [name]: checked });
   };
 
-  // ───────────────────────────────────────────────
-  // Full form submit (including files)
-  // ───────────────────────────────────────────────
+  // ── Full form submit (with files) ─────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.title.trim()) return toast.error('Title is required');
-    if (!form.contentType) return toast.error('Content type is required');
+    if (!form.title.trim())   return toast.error('Title is required');
+    if (!form.contentType)    return toast.error('Content type is required');
 
     setUpdating(true);
 
     try {
       const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
-      if (sessionErr || !session) {
-        toast.error('You must be logged in');
-        return;
-      }
+      if (sessionErr || !session) { toast.error('You must be logged in'); return; }
 
-      const formData = new FormData();
-      formData.append('content_id', id!);
-      formData.append('title', form.title.trim());
-      formData.append('subtitle', form.subtitle.trim());
-      formData.append('author', form.author.trim());
-      formData.append('publisher', form.publisher.trim());
-      formData.append('description', form.description.trim());
-      formData.append('content_type', form.contentType);
-      formData.append('price', form.price || '0');
-      formData.append('isbn', form.isbn.trim());
-      formData.append('language', form.language);
-      formData.append('visibility', form.visibility);
-      formData.append('status', form.status);
-      formData.append('version', form.version);
-      formData.append('is_featured', form.is_featured.toString());
-      formData.append('is_for_sale', form.is_for_sale.toString());
+      const fd = new FormData();
+      fd.append('content_id',   id!);
+      fd.append('title',        form.title.trim());
+      fd.append('subtitle',     form.subtitle.trim());
+      fd.append('author',       form.author.trim());
+      fd.append('publisher',    form.publisher.trim());
+      fd.append('description',  form.description.trim());
+      fd.append('content_type', form.contentType);
+      fd.append('price',        form.price || '0');
+      fd.append('isbn',         form.isbn.trim());
+      fd.append('language',     form.language);
+      fd.append('visibility',   form.visibility);
+      fd.append('status',       form.status);
+      fd.append('version',      form.version);
+      fd.append('is_featured',  form.is_featured.toString());
+      fd.append('is_for_sale',  form.is_for_sale.toString());
+      fd.append('is_free',      form.is_free.toString());
 
-      if (form.category_id) formData.append('category_id', form.category_id);
-      if (form.page_count) formData.append('page_count', form.page_count);
-      if (form.stock_quantity) formData.append('stock_quantity', form.stock_quantity);
+      if (form.category_id)   fd.append('category_id',   form.category_id);
+      if (form.page_count)    fd.append('page_count',    form.page_count);
+      if (form.stock_quantity) fd.append('stock_quantity', form.stock_quantity);
 
       if (form.tags.trim()) {
-        const tagsArray = form.tags
-          .split(',')
-          .map((t) => t.trim())
-          .filter(Boolean);
-        formData.append('tags', JSON.stringify(tagsArray));
+        const tagsArr = form.tags.split(',').map(t => t.trim()).filter(Boolean);
+        fd.append('tags', JSON.stringify(tagsArr));
       }
 
-      if (form.cover) formData.append('cover_image', form.cover);
-      if (form.backpage) formData.append('backpage_image', form.backpage);
+      if (form.cover)    fd.append('cover_image',    form.cover);
+      if (form.backpage) fd.append('backpage_image', form.backpage);
 
-      const { error } = await supabase.functions.invoke('content-update', {
-        body: formData,
-      });
+      const { error } = await supabase.functions.invoke('content-update', { body: fd });
 
       if (error) {
         console.error('Update error:', error);
-        
-        // Display user-friendly error message
-        const errorMessage = error.message || 'Update failed. Please try again.';
-        toast.error(errorMessage, {
-          duration: 6000,
-        });
-        
-        return; // Don't throw, return to prevent showing generic error
+        toast.error(error.message || 'Update failed. Please try again.', { duration: 6000 });
+        return;
       }
 
-      toast.success('Content updated successfully');
+      toast.success('Content updated successfully ✓');
 
-      // Reload fresh data
-      await loadContent();
+      // FIX: increment refreshKey → triggers the useEffect that calls loadContent()
+      // This guarantees a fresh DB fetch rather than relying on stale closure state.
+      setRefreshKey(k => k + 1);
 
       // Clear file inputs
-      if (coverInputRef.current) coverInputRef.current.value = '';
+      if (coverInputRef.current)    coverInputRef.current.value    = '';
       if (backpageInputRef.current) backpageInputRef.current.value = '';
-      setForm((prev) => ({ ...prev, cover: null, backpage: null }));
+      setForm(prev => ({ ...prev, cover: null, backpage: null }));
     } catch (err: any) {
       console.error('Full update failed:', err);
       toast.error(err.message || 'Update failed');
@@ -392,6 +354,7 @@ export default function ContentUpdatePage() {
     }
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <Layout>
@@ -407,27 +370,26 @@ export default function ContentUpdatePage() {
       <div className="container mx-auto py-8 px-4 max-w-5xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Update Content</h1>
-          <p className="text-muted-foreground">
-            Modify metadata or replace files for your content
-          </p>
+          <p className="text-muted-foreground">Modify metadata or replace files for your content</p>
         </div>
 
+        {/* Action bar */}
         <div className="flex items-center gap-3 mb-6 flex-wrap">
           <Button variant="outline" size="sm" onClick={loadVersionHistory}>
-            <History className="h-4 w-4 mr-2" />
-            Version History
+            <History className="h-4 w-4 mr-2" /> Version History
           </Button>
           <Button variant="secondary" size="sm" onClick={() => navigate(`/content/publish/${id}`)}>
             Publish Now
           </Button>
+          <Button variant="ghost" size="sm" onClick={() => setRefreshKey(k => k + 1)} title="Refresh data from database">
+            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+          </Button>
           {id && <ContentDeleteButton contentId={id} />}
         </div>
 
-        {/* Current files card */}
+        {/* Current files */}
         <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-lg">Current Files</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg">Current Files</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {form.currentFileUrl && (
               <div className="flex items-center justify-between p-3 border rounded-lg">
@@ -435,12 +397,7 @@ export default function ContentUpdatePage() {
                   <FileText className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium text-sm">Content File</p>
-                    <a
-                      href={form.currentFileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
-                    >
+                    <a href={form.currentFileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
                       View current file
                     </a>
                   </div>
@@ -448,43 +405,37 @@ export default function ContentUpdatePage() {
                 <Badge variant="secondary">v{form.version}</Badge>
               </div>
             )}
-
             {form.currentCoverUrl && (
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <ImageIcon className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium text-sm">Cover Image</p>
-                    <a
-                      href={form.currentCoverUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
-                    >
+                    <a href={form.currentCoverUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
                       View current cover
                     </a>
                   </div>
                 </div>
+                {form.currentCoverUrl && (
+                  <img src={form.currentCoverUrl} alt="cover" className="h-12 w-8 object-cover rounded shadow-sm" />
+                )}
               </div>
             )}
-
             {form.currentBackpageUrl && (
               <div className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <ImageIcon className="h-5 w-5 text-primary" />
                   <div>
                     <p className="font-medium text-sm">Backpage Image</p>
-                    <a
-                      href={form.currentBackpageUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-600 hover:underline"
-                    >
+                    <a href={form.currentBackpageUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
                       View current backpage
                     </a>
                   </div>
                 </div>
               </div>
+            )}
+            {!form.currentFileUrl && !form.currentCoverUrl && !form.currentBackpageUrl && (
+              <p className="text-sm text-muted-foreground py-2">No files currently attached to this content.</p>
             )}
           </CardContent>
         </Card>
@@ -494,9 +445,7 @@ export default function ContentUpdatePage() {
           <Card className="mb-6 border-2 border-primary">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Version History</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowVersionHistory(false)}>
-                Close
-              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setShowVersionHistory(false)}>Close</Button>
             </CardHeader>
             <CardContent>
               {versionHistory.length === 0 ? (
@@ -512,19 +461,13 @@ export default function ContentUpdatePage() {
                         <div>
                           <h4 className="font-semibold">Version {v.version_number}</h4>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(v.changed_at).toLocaleDateString()} by{' '}
-                            {v.changed_by_name || 'Unknown'}
+                            {new Date(v.changed_at).toLocaleDateString()} by {v.changed_by_name || 'Unknown'}
                           </p>
                         </div>
                         <Badge variant="outline">{v.format}</Badge>
                       </div>
                       <p className="text-sm mb-3">{v.change_summary}</p>
-                      <a
-                        href={v.file_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:underline"
-                      >
+                      <a href={v.file_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
                         Download ({v.file_size_mb} MB)
                       </a>
                     </div>
@@ -535,52 +478,30 @@ export default function ContentUpdatePage() {
           </Card>
         )}
 
+        {/* ─────────────────────────── Form ─────────────────────────── */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* ───────────────────── Basic Information ───────────────────── */}
+
+          {/* Basic Information */}
           <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Basic Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="title">
-                  Title <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="title"
-                  name="title"
-                  value={form.title}
-                  onChange={handleChange}
-                  placeholder="Enter content title"
-                  required
-                />
+                <Label htmlFor="title">Title <span className="text-destructive">*</span></Label>
+                <Input id="title" name="title" value={form.title} onChange={handleChange} placeholder="Enter content title" required />
               </div>
 
               <div>
                 <Label htmlFor="subtitle">Subtitle</Label>
-                <Input
-                  id="subtitle"
-                  name="subtitle"
-                  value={form.subtitle}
-                  onChange={handleChange}
-                  placeholder="Enter subtitle (optional)"
-                />
+                <Input id="subtitle" name="subtitle" value={form.subtitle} onChange={handleChange} placeholder="Enter subtitle (optional)" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="contentType">
-                    Content Type <span className="text-destructive">*</span>
-                  </Label>
-                  <Select
-                    value={form.contentType}
-                    onValueChange={(v) => handleSelectChange('contentType', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select content type" />
-                    </SelectTrigger>
+                  <Label htmlFor="contentType">Content Type <span className="text-destructive">*</span></Label>
+                  <Select value={form.contentType} onValueChange={v => handleSelectChange('contentType', v)}>
+                    <SelectTrigger><SelectValue placeholder="Select content type" /></SelectTrigger>
                     <SelectContent>
-                      {CONTENT_TYPES.map((type) => (
+                      {CONTENT_TYPES.map(type => (
                         <SelectItem key={type} value={type}>
                           {type.charAt(0).toUpperCase() + type.slice(1)}
                         </SelectItem>
@@ -588,215 +509,117 @@ export default function ContentUpdatePage() {
                     </SelectContent>
                   </Select>
                   {isEbookType && (
-                    <p className="text-xs text-amber-600 mt-2">
-                      Note: Ebooks require cover image and backpage image when uploading
-                    </p>
+                    <p className="text-xs text-amber-600 mt-2">Note: Ebooks require cover image and backpage image when uploading</p>
                   )}
                 </div>
 
                 <div>
                   <Label htmlFor="status">Status</Label>
-                  <Select
-                    value={form.status}
-                    onValueChange={(v) => handleSelectChange('status', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  {/* FIX: now includes 'published' so published manuscripts display correctly */}
+                  <Select value={form.status} onValueChange={v => handleSelectChange('status', v)}>
+                    <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                     <SelectContent>
-                      {STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
+                      {STATUS_OPTIONS.map(opt => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {form.status === 'published' && (
+                    <p className="text-xs text-emerald-600 mt-1">This content is currently live and visible to users.</p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="author">Author</Label>
-                  <Input
-                    id="author"
-                    name="author"
-                    value={form.author}
-                    onChange={handleChange}
-                    placeholder="Enter author name"
-                  />
+                  <Input id="author" name="author" value={form.author} onChange={handleChange} placeholder="Enter author name" />
                 </div>
                 <div>
                   <Label htmlFor="publisher">Publisher</Label>
-                  <Input
-                    id="publisher"
-                    name="publisher"
-                    value={form.publisher}
-                    onChange={handleChange}
-                    placeholder="Enter publisher name"
-                  />
+                  <Input id="publisher" name="publisher" value={form.publisher} onChange={handleChange} placeholder="Enter publisher name" />
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* ───────────────────── Category & Tags ───────────────────── */}
+          {/* Category & Tags */}
           <Card>
-            <CardHeader>
-              <CardTitle>Category & Tags</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Category & Tags</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div>
                 <Label htmlFor="category_id">Category</Label>
-                <Select
-                  value={form.category_id}
-                  onValueChange={(v) => handlePartialSelect('category_id', v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
-                  </SelectTrigger>
+                <Select value={form.category_id || ''} onValueChange={v => handlePartialSelect('category_id', v)}>
+                  <SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        {cat.name}
-                      </SelectItem>
+                    {categories.map(cat => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
               <div>
                 <Label htmlFor="tags">Tags</Label>
-                <Input
-                  id="tags"
-                  name="tags"
-                  value={form.tags}
-                  onChange={handleChange}
-                  placeholder="fiction, adventure, fantasy"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Separate tags with commas
-                </p>
+                <Input id="tags" name="tags" value={form.tags} onChange={handleChange} placeholder="fiction, adventure, fantasy" />
+                <p className="text-xs text-muted-foreground mt-1">Separate tags with commas</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* ───────────────────── Sales & Inventory ───────────────────── */}
+          {/* Sales & Inventory */}
           <Card>
-            <CardHeader>
-              <CardTitle>Sales & Inventory</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Sales & Inventory</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="price">Price (USD)</Label>
-                  <Input
-                    id="price"
-                    name="price"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.price}
-                    onChange={handlePartialTextChange}
-                    placeholder="0.00"
-                  />
+                  <Label htmlFor="price">Price (KSH)</Label>
+                  <Input id="price" name="price" type="number" step="0.01" min="0" value={form.price} onChange={handlePartialTextChange} placeholder="0.00" />
                 </div>
-
                 <div>
                   <Label htmlFor="stock_quantity">Stock Quantity</Label>
-                  <Input
-                    id="stock_quantity"
-                    name="stock_quantity"
-                    type="number"
-                    min="0"
-                    value={form.stock_quantity}
-                    onChange={handlePartialTextChange}
-                    placeholder="0"
-                  />
+                  <Input id="stock_quantity" name="stock_quantity" type="number" min="0" value={form.stock_quantity} onChange={handlePartialTextChange} placeholder="0" />
                 </div>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="is_for_sale"
-                    checked={form.is_for_sale}
-                    onCheckedChange={(checked) =>
-                      handlePartialCheckbox('is_for_sale', !!checked)
-                    }
-                  />
-                  <Label
-                    htmlFor="is_for_sale"
-                    className="text-sm font-medium leading-none cursor-pointer"
-                  >
-                    Available for sale
-                  </Label>
+                  <Checkbox id="is_free" checked={form.is_free} onCheckedChange={c => handlePartialCheckbox('is_free', !!c)} />
+                  <Label htmlFor="is_free" className="text-sm font-medium leading-none cursor-pointer">Free content (no purchase required)</Label>
                 </div>
-
                 <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="is_featured"
-                    checked={form.is_featured}
-                    onCheckedChange={(checked) =>
-                      handlePartialCheckbox('is_featured', !!checked)
-                    }
-                  />
-                  <Label
-                    htmlFor="is_featured"
-                    className="text-sm font-medium leading-none cursor-pointer"
-                  >
-                    Feature this content
-                  </Label>
+                  <Checkbox id="is_for_sale" checked={form.is_for_sale} onCheckedChange={c => handlePartialCheckbox('is_for_sale', !!c)} />
+                  <Label htmlFor="is_for_sale" className="text-sm font-medium leading-none cursor-pointer">Available for sale</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="is_featured" checked={form.is_featured} onCheckedChange={c => handlePartialCheckbox('is_featured', !!c)} />
+                  <Label htmlFor="is_featured" className="text-sm font-medium leading-none cursor-pointer">Feature this content</Label>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* ───────────────────── Additional Details ───────────────────── */}
+          {/* Additional Details */}
           <Card>
-            <CardHeader>
-              <CardTitle>Additional Details</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Additional Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="isbn">ISBN</Label>
-                  <Input
-                    id="isbn"
-                    name="isbn"
-                    value={form.isbn}
-                    onChange={handleChange}
-                    placeholder="Enter ISBN"
-                  />
+                  <Input id="isbn" name="isbn" value={form.isbn} onChange={handleChange} placeholder="Enter ISBN" />
                 </div>
-
                 <div>
                   <Label htmlFor="page_count">Page Count</Label>
-                  <Input
-                    id="page_count"
-                    name="page_count"
-                    type="number"
-                    min="0"
-                    value={form.page_count}
-                    onChange={handlePartialTextChange}
-                    placeholder="0"
-                  />
+                  <Input id="page_count" name="page_count" type="number" min="0" value={form.page_count} onChange={handlePartialTextChange} placeholder="0" />
                 </div>
               </div>
 
               <div>
                 <Label htmlFor="visibility">Visibility</Label>
-                <Select
-                  value={form.visibility}
-                  onValueChange={(v) => handleSelectChange('visibility', v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                <Select value={form.visibility} onValueChange={v => handleSelectChange('visibility', v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {VISIBILITY_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
+                    {VISIBILITY_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -804,55 +627,33 @@ export default function ContentUpdatePage() {
 
               <div>
                 <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  placeholder="Provide a detailed description..."
-                  rows={5}
-                />
+                <Textarea id="description" name="description" value={form.description} onChange={handleChange} placeholder="Provide a detailed description..." rows={5} />
               </div>
             </CardContent>
           </Card>
 
-          {/* ───────────────────── Files ───────────────────── */}
+          {/* Images */}
           <Card>
-            <CardHeader>
-              <CardTitle>Images</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Images</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <Label htmlFor="cover_image">Replace Cover Image (Optional)</Label>
-                  <Input
-                    id="cover_image"
-                    name="cover_image"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleFileChange}
-                    ref={coverInputRef}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Max 10MB. JPG, PNG, WebP
-                  </p>
+                  <Input id="cover_image" name="cover_image" type="file" accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange} ref={coverInputRef} className="mt-1" />
+                  <p className="text-xs text-muted-foreground mt-2">Max 10MB. JPG, PNG, WebP</p>
+                  {form.cover && (
+                    <p className="text-xs text-emerald-600 mt-1">New cover selected: {form.cover.name}</p>
+                  )}
                 </div>
-
                 <div>
                   <Label htmlFor="backpage_image">Replace Backpage Image (Optional)</Label>
-                  <Input
-                    id="backpage_image"
-                    name="backpage_image"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleFileChange}
-                    ref={backpageInputRef}
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Max 10MB. JPG, PNG, WebP
-                  </p>
+                  <Input id="backpage_image" name="backpage_image" type="file" accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileChange} ref={backpageInputRef} className="mt-1" />
+                  <p className="text-xs text-muted-foreground mt-2">Max 10MB. JPG, PNG, WebP</p>
+                  {form.backpage && (
+                    <p className="text-xs text-emerald-600 mt-1">New backpage selected: {form.backpage.name}</p>
+                  )}
                 </div>
               </div>
             </CardContent>
@@ -862,24 +663,12 @@ export default function ContentUpdatePage() {
           <div className="flex items-center gap-4 pt-6">
             <Button type="submit" variant="default" size="lg" disabled={updating}>
               {updating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Updating...
-                </>
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating…</>
               ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Update Content
-                </>
+                <><Upload className="mr-2 h-4 w-4" /> Update Content</>
               )}
             </Button>
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(-1)}
-              disabled={updating}
-            >
+            <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={updating}>
               Cancel
             </Button>
           </div>
