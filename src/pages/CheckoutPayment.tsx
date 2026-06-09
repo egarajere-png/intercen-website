@@ -294,11 +294,11 @@ const CheckoutPayment = () => {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Layout>
-      <Seo
+      {/* <Seo
         title="Checkout Payment | Intercen Books"
         description="Complete your order payment securely on Intercen Books. Choose your preferred payment method and finalize your purchase."
         canonical="https://www.intercenbooks.com/checkout/payment"
-      />
+      /> */}
 
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="container max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

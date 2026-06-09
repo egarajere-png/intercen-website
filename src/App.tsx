@@ -20,6 +20,8 @@ import Cart from "./pages/Cart";
 import About from "./pages/About";
 import PublishWithUs from "./pages/PublishWithUs";
 import ProductsServices from "./pages/ProductsServices";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import Auth from "./pages/Auth";
 import ProfileSetup from "./pages/ProfileSetup";
 import Profile from "./pages/Profile";
@@ -86,6 +88,8 @@ const App = () => {
                     <Route path="/about" element={<About />} />
                     <Route path="/publish" element={<PublishWithUs />} />
                     <Route path="/services" element={<ProductsServices />} />
+                    <Route path="/privacy" element={<Privacy />} />
+                    <Route path="/terms" element={<Terms />} />
 
                     {/* Auth Routes */}
                     <Route path="/auth" element={<Auth />} />
