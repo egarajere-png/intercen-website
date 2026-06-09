@@ -20,8 +20,5 @@
     <loc>https://www.intercenbooks.co.ke/services</loc>
     <priority>0.7</priority>
   </url>
-  <url>
-    <loc>https://www.intercenbooks.co.ke/content-search</loc>
-    <priority>0.6</priority>
-  </url>
+
 </urlset>
